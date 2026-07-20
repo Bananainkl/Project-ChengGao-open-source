@@ -1,0 +1,33 @@
+name: 发布 GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 核对版本与更新说明
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          build="$(tr -d '[:space:]' < BUILD_NUMBER)"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+          test -s RELEASE_NOTES.md
+          grep -Fq "${version}" RELEASE_NOTES.md
+          grep -Fq "## ${version} (${build})" CHANGELOG.md
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --title "澄稿 ${GITHUB_REF_NAME}" \
+            --notes-file RELEASE_NOTES.md
