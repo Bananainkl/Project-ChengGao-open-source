@@ -1,0 +1,17 @@
+.build/
+dist/
+.swiftpm/
+.codex/
+*.xcuserstate
+.DS_Store
+Models/*.gguf
+Models/*.bin
+Runtime/
+Licenses/
+Frameworks/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
