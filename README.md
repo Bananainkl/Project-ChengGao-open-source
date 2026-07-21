@@ -5,10 +5,10 @@
 </p>
 
 <p align="center">
-  <a href="#快速开始"><strong>快速开始</strong></a> ·
-  <a href="https://github.com/Bananainkl/Project-ChengGao-open-source/releases">版本发布</a> ·
-  <a href="https://github.com/Bananainkl/Project-ChengGao-open-source/issues">问题与建议</a> ·
-  <a href="https://github.com/Bananainkl/Project-ChengGao-open-source/discussions">讨论区</a>
+  <a href="#快速开始"><strong>快速开始 / Quick Start</strong></a> ·
+  <a href="https://github.com/Bananainkl/Project-ChengGao-open-source/releases">版本发布 / Releases</a> ·
+  <a href="https://github.com/Bananainkl/Project-ChengGao-open-source/issues">问题与建议 / Issues</a> ·
+  <a href="https://github.com/Bananainkl/Project-ChengGao-open-source/discussions">讨论区 / Discussions</a>
 </p>
 
 <p align="center">
@@ -19,7 +19,15 @@
   <img alt="GitHub stars" src="https://img.shields.io/github/stars/Bananainkl/Project-ChengGao-open-source?style=flat">
 </p>
 
+## 中文简介
+
 **把网页、视频或粘贴素材变成可继续编辑、可以直接发布的完整文稿。** 澄稿是一款原生 macOS 内容工作台：先提取真实正文或字幕，再完成全文改写、修改建议、内容研究与镜头提示词生成。
+
+## English Overview
+
+**Turn webpages, videos, and pasted source material into editable, publication-ready writing.** ChengGao is a native macOS content workspace that extracts real article text or subtitles before producing full-document rewrites, revision guidance, topic research, and storyboard-ready image prompts.
+
+It combines local Whisper transcription, embedded local language models, and optional user-configured online services. The workflow preserves the source, section-by-section recommendations, revised draft, and visual suggestions so every result remains reviewable.
 
 ## 适合什么场景
 
