@@ -12,4 +12,4 @@ fi
 
 (cd "$ROOT_DIR" && swift test -Xswiftc -warnings-as-errors)
 "$ROOT_DIR/script/package_dmg.sh"
-"$ROOT_DIR/script/install_local.sh"
+"$ROOT_DIR/script/install_local.sh" "$ROOT_DIR/dist/澄稿-$VERSION-macOS-arm64.dmg"
