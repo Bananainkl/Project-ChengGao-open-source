@@ -330,6 +330,9 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
         9. 只返回一个 JSON 对象，不要 Markdown。必须先输出 revised，确保完整成稿优先返回；不要输出 corrected 字段。字段顺序与结构为：
         {"revised":"完成实质改写的完整成稿","title":"成稿标题","corrections":[{"original":"原词","corrected":"校正词","reason":"上下文依据"}],"suggestions":[{"original":"具体原句","suggestion":"具体改法","reason":"修改原因"}]}
 
+        成稿信息量硬性要求：
+        \(lengthTargetInstruction(material: material, style: style))
+
         目标成稿规格（以此决定文体，不得被原素材形式覆盖）：
         \(targetContract(for: style))
 
@@ -366,6 +369,8 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
         return """
         上一版“\(style.rawValue)”未通过编辑质量检查：\(issues.joined(separator: "；"))。
         请重新通读原稿和上一版，完成一次真正的全文结构重写。必须保留事实，但要更换开头、信息顺序、段落结构和句式，消除逐句复述与拼接感。
+        上一版 revised 约有 \(contentCharacterCount(firstDraft)) 个有效字符。\(lengthTargetInstruction(material: material, style: style))
+        若上一版过短，必须逐项恢复原稿中被压缩的背景、原因、例子、过程、转折、限定条件和结论；不得用空洞重复、口号或虚构细节凑字数。
         \(anchorInstruction)
         \(language.promptInstruction)
         仍必须严格按照以下目标成稿规格，不得回到原素材的表达形式：
@@ -394,6 +399,22 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
         case .channel:
             return "生成一篇可直接用于视频号的完整文案。保留口播的自然感，但比短视频口播更稳健、信息更完整，先交代背景和事实链，再给出判断与启发；避免过度猎奇、高密度口号和无依据的情绪放大。revised 中不要输出分镜或配图提示词。"
         }
+    }
+
+    nonisolated static func lengthTargetInstruction(material: SourceMaterial, style: RewriteStyle) -> String {
+        let sourceCount = contentCharacterCount(material.transcript)
+        let hanCount = material.transcript.unicodeScalars.filter {
+            (0x3400...0x4DBF).contains($0.value) || (0x4E00...0x9FFF).contains($0.value)
+        }.count
+        guard sourceCount >= 180, hanCount * 2 >= sourceCount else {
+            return "必须保留原稿的完整信息量，不得把改写做成摘要或只保留主旨。"
+        }
+        let minimum = Int((Double(sourceCount) * 0.75).rounded(.up))
+        return "原稿约 \(sourceCount) 个有效字符；revised 不得少于 \(minimum) 个有效字符，并应接近原稿信息量。“句子简短”只指句式和节奏，不得减少全文篇幅，不得把改写做成摘要。"
+    }
+
+    nonisolated static func contentCharacterCount(_ text: String) -> Int {
+        text.filter { !$0.isWhitespace && !$0.isPunctuation }.count
     }
 
     nonisolated static func sourceEvidence(for material: SourceMaterial) -> String {

@@ -15,7 +15,7 @@
   <img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-2563eb">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-native-f05138?logo=swift&logoColor=white">
   <img alt="macOS 26" src="https://img.shields.io/badge/macOS-26-111827?logo=apple">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-152_passing-22c55e">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-154_passing-22c55e">
   <img alt="GitHub stars" src="https://img.shields.io/github/stars/Bananainkl/Project-ChengGao-open-source?style=flat">
 </p>
 
@@ -38,13 +38,14 @@ It combines local Whisper transcription, embedded local language models, and opt
 - 一键输出以短视频标题命名的文件包，统一带走口播字幕纯文本、改写文稿、逐镜提示词和已经生成的图片。
 - 配图建议会结合标题、完整成稿和画面风格生成抖音 3:4 竖版与 16:9 横版双封面，并由 App 在本机排入准确标题。
 - 抖音搜索兼容带安全前缀的 JSON、新版作品字段与结果卡片页面结构。
+- 中文长稿改写会把原稿有效字数与最低篇幅目标发送给在线模型；过短时按字数差定向补回背景、例子、过程和结论，不会把摘要当成改写。
 - 8GB Mac 使用轻量模型保护模式，配置在线接口后也能使用在线优先与本地回退。
 
 <p align="center">
   <img src="docs/images/product-screenshot.png" alt="澄稿原生 macOS 文稿工作台" width="85%">
 </p>
 
-当前版本：`1.21.1 (59)`。公开版本由根目录 `VERSION` 管理，内部构建号由
+当前版本：`1.21.2 (60)`。公开版本由根目录 `VERSION` 管理，内部构建号由
 `BUILD_NUMBER` 管理；每次功能更新必须先递增二者，再重新生成安装包。
 
 一个面向 macOS 26 的内容提取与改写应用。目标是在 Apple Silicon Mac 上完成网页读取、

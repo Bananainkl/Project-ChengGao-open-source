@@ -726,6 +726,8 @@ struct OfflineRewritePipelineTests {
         #expect(prompt.components(separatedBy: transcript).count == 2)
         #expect(prompt.contains("必须先输出 revised"))
         #expect(prompt.contains("不要输出 corrected 字段"))
+        #expect(prompt.contains("不得少于"))
+        #expect(prompt.contains("不得把改写做成摘要"))
         #expect(!prompt.contains(#""corrected":"仅纠错后的完整原稿""#))
     }
 
@@ -898,6 +900,44 @@ struct OfflineRewritePipelineTests {
             sourceOrigin: .localSpeechRecognition,
             style: .spoken
         ).contains("全文仍以逐句复述为主，实质改写幅度不足"))
+    }
+
+    @Test("语音转写口播稿不会把四成篇幅误当成合理压缩")
+    func spokenTranscriptRejectsFortyPercentSummary() {
+        let filler = "其实我觉得吧这件事真的值得大家认真说一说，也就是说咱们先不要急着下结论。"
+        let first = "员工把项目进度如实报告后，主管当场追问了三个风险点，并要求团队在周五前补齐数据。"
+        let second = "第二天会议改为公开复盘，业务、技术和客服分别确认责任边界，没有把问题推给一个人。"
+        let third = "最后管理层撤销了不合理的考核扣分，建立每周风险清单，并承诺一个月后检查改进结果。"
+        let original = first + String(repeating: filler, count: 3)
+            + second + String(repeating: filler, count: 3)
+            + third + String(repeating: filler, count: 3)
+        let revised = [first, second, third].joined(separator: "\n")
+
+        let issues = EmbeddedModelRuntime.documentQualityIssues(
+            original: original,
+            revised: revised,
+            sourceOrigin: .localSpeechRecognition,
+            style: .spoken
+        )
+
+        #expect(Double(revised.count) / Double(original.count) > 0.25)
+        #expect(Double(revised.count) / Double(original.count) < 0.40)
+        #expect(issues.contains("成稿过度缩短，可能遗漏后半篇重要信息"))
+    }
+
+    @Test("语音转写口播稿仍会拒绝真正的过度缩短")
+    func spokenTranscriptStillRejectsSevereCompression() {
+        let original = String(repeating: "项目先说明背景与风险，再交代各方责任、执行时间和最终结果。", count: 10)
+        let revised = "项目遇到风险，团队最后完成了处理。"
+
+        let issues = EmbeddedModelRuntime.documentQualityIssues(
+            original: original,
+            revised: revised,
+            sourceOrigin: .localSpeechRecognition,
+            style: .spoken
+        )
+
+        #expect(issues.contains("成稿过度缩短，可能遗漏后半篇重要信息"))
     }
 
     @Test("High-similarity retry asks for semantic-group structural reconstruction")
@@ -1204,7 +1244,7 @@ struct OfflineRewritePipelineTests {
     func onlineRetryNamesMissingFactualAnchors() {
         let material = SourceMaterial(
             title: "调查",
-            transcript: "2026年10月1日，新华社称共有120人参与，完成率达到35%。",
+            transcript: "2026年10月1日，新华社称共有120人参与，完成率达到35%。" + String(repeating: "报告还交代了调查背景、执行过程、各方回应和后续安排。", count: 8),
             origin: .localSpeechRecognition,
             durationSeconds: 18
         )
@@ -1219,6 +1259,9 @@ struct OfflineRewritePipelineTests {
         #expect(prompt.contains("2026年"))
         #expect(prompt.contains("120人"))
         #expect(prompt.contains("35%"))
+        #expect(prompt.contains("上一版 revised 约有"))
+        #expect(prompt.contains("不得少于"))
+        #expect(prompt.contains("不得用空洞重复"))
     }
 
     @Test("Custom compatible provider rejects incomplete pasted credentials")
