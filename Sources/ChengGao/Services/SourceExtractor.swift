@@ -167,17 +167,34 @@ actor SourceExtractor: SourceExtracting, ResearchSourceExtracting {
         }
         guard let localVideo else { throw SourceExtractionError.transcriptUnavailable }
         defer { try? FileManager.default.removeItem(at: localVideo) }
-        let transcript = try await transcriber.transcribe(
-            audioURL: localVideo,
-            expectedDuration: resource.durationSeconds
-        )
+        let transcript: String
+        let origin: TranscriptOrigin
+        do {
+            transcript = try await transcriber.transcribe(
+                audioURL: localVideo,
+                expectedDuration: resource.durationSeconds
+            )
+            origin = .localSpeechRecognition
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            let visibleText = await VideoFrameTextExtractor.extract(
+                from: localVideo,
+                durationSeconds: resource.durationSeconds
+            )
+            guard Self.isPlausibleTranscript(visibleText, duration: resource.durationSeconds) else {
+                throw error
+            }
+            transcript = visibleText
+            origin = .platformSubtitle
+        }
         guard Self.isPlausibleTranscript(transcript, duration: resource.durationSeconds) else {
             throw SourceExtractionError.transcriptUnavailable
         }
         return SourceMaterial(
             title: resource.title,
             transcript: transcript,
-            origin: .localSpeechRecognition,
+            origin: origin,
             durationSeconds: resource.durationSeconds,
             sourceContentKind: .video
         )
@@ -683,7 +700,7 @@ actor SourceExtractor: SourceExtracting, ResearchSourceExtracting {
 
     nonisolated static func isPlausibleTranscript(_ text: String, duration: Int?) -> Bool {
         let compact = text.filter { !$0.isWhitespace }
-        let minimum = min(200, max(40, (duration ?? 80) / 2))
+        let minimum = LocalSpeechTranscriber.minimumTranscriptCharacters(expectedDuration: duration)
         return compact.count >= minimum
     }
 

@@ -450,11 +450,15 @@ struct OfflineRewritePipelineTests {
         #expect(!response.contains(".ds-markdown"))
         #expect(WebAIWebSession.focusEditorScript(provider: .qwen).contains("data-slate-editor"))
         #expect(WebAIWebSession.clickSendScript(provider: .qwen).contains("发送消息"))
+        #expect(WebAIWebSession.clickSendScript(provider: .deepSeek).contains(".ds-icon-button"))
     }
 
     @Test("网页 AI 提交与回读脚本可在 WebKit 真实执行")
     @MainActor
     func webAIScriptsExecuteInWebKit() async throws {
+        // GitHub's macOS runner has no interactive WindowServer session; the
+        // same real WebKit test is exercised by local release acceptance.
+        guard ProcessInfo.processInfo.environment["CI"] != "true" else { return }
         let webView = WKWebView(frame: .zero)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
@@ -1215,6 +1219,31 @@ struct OfflineRewritePipelineTests {
         #expect(SourceExtractor.firstURL(in: shared)?.host == "www.bilibili.com")
         #expect(SourceExtractor.bilibiliBVID(in: shared) == "BV13Kj169ETG")
         #expect(!SourceExtractor.isPlausibleTranscript("只有标题", duration: 343))
+        #expect(LocalSpeechTranscriber.minimumTranscriptCharacters(expectedDuration: 15) == 8)
+        #expect(SourceExtractor.isPlausibleTranscript("一个合格的下属应该", duration: 15))
+        #expect(!SourceExtractor.isPlausibleTranscript("音乐", duration: 15))
+    }
+
+    @Test("Video frame text keeps changing captions and removes repeated overlays")
+    func videoFrameTextDeduplication() {
+        let value = VideoFrameTextExtractor.mergedVisibleText([
+            "一个合格的下属\n只解决问题",
+            "一个合格的下属\n不争论对错",
+            "不争论对错"
+        ])
+        #expect(value == "一个合格的下属\n只解决问题\n不争论对错")
+    }
+
+    @Test("Live local video frame OCR returns visible captions")
+    func liveLocalVideoFrameOCR() async throws {
+        guard let path = ProcessInfo.processInfo.environment["CHENGGAO_VIDEO_OCR_PATH"] else { return }
+        let value = await VideoFrameTextExtractor.extract(
+            from: URL(fileURLWithPath: path),
+            durationSeconds: 16
+        )
+        print("LIVE_VIDEO_FRAME_TEXT=\(value)")
+        #expect(value.contains("合格的下属"))
+        #expect(value.count >= 8)
     }
 
     @Test("Splits a long transcript without losing characters")

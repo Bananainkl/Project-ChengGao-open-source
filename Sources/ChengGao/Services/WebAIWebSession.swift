@@ -240,7 +240,8 @@ final class WebAIWebSession {
               || (button.getAttribute('title') || '').trim() === label
               || (button.innerText || '').trim() === label
             )
-          );
+          ) || document.querySelector('path[d^="M8.3125"]')
+            ?.closest('.ds-icon-button, [role="button"], button');
           if (!send) return false;
           send.click();
           return true;
@@ -265,7 +266,8 @@ final class WebAIWebSession {
               || (button.getAttribute('title') || '').trim() === label
               || (button.innerText || '').trim() === label
             )
-          );
+          ) || document.querySelector('path[d^="M8.3125"]')
+            ?.closest('.ds-icon-button, [role="button"], button');
           if (!send) return '';
           const rect = send.getBoundingClientRect();
           return JSON.stringify({x: rect.left + rect.width / 2,
@@ -307,6 +309,13 @@ final class WebAIWebSession {
             if try await javascriptBool(editorClearedScript) { return true }
             try await Task.sleep(for: .milliseconds(100))
         }
+        if try await javascriptBool(Self.clickSendScript(provider: provider)) {
+            for _ in 0..<20 {
+                try Task.checkCancellation()
+                if try await javascriptBool(editorClearedScript) { return true }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
         guard let point = try await sendButtonCenter() else { return false }
         clickWebView(at: point)
         for _ in 0..<20 {
@@ -320,7 +329,7 @@ final class WebAIWebSession {
     private func sendButtonCenter() async throws -> NSPoint? {
         let value = try await javascriptString(Self.sendButtonCenterScript(provider: provider))
         guard let data = value.data(using: .utf8),
-              let object = try JSONSerialization.jsonObject(with: data) as? [String: Double],
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Double],
               let x = object["x"], let y = object["y"] else { return nil }
         return NSPoint(x: x, y: webView.bounds.height - y)
     }

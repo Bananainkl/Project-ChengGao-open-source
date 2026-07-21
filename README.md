@@ -15,7 +15,7 @@
   <img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-2563eb">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-native-f05138?logo=swift&logoColor=white">
   <img alt="macOS 26" src="https://img.shields.io/badge/macOS-26-111827?logo=apple">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-164_passing-22c55e">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-166_passing-22c55e">
   <img alt="GitHub stars" src="https://img.shields.io/github/stars/Bananainkl/Project-ChengGao-open-source?style=flat">
 </p>
 
@@ -31,7 +31,7 @@ It combines local Whisper transcription, embedded local language models, and opt
 
 ## 适合什么场景
 
-- 视频有字幕时直接提取；没有字幕时下载音轨并在本机使用 Whisper 转写。
+- 视频有字幕时直接提取；没有字幕时下载音轨并在本机使用 Whisper 转写，短片无可识别对白时再读取画面内真实标题与字幕。
 - 将网页正文、口播素材或研究结果整理为公众号、短视频、小红书或视频号文稿。
 - 在“原稿、逐段建议、修改稿、配图建议”之间保留完整可追溯链路。
 - 短视频口播稿按完整句子整理为一句一行，复制、编辑保存和历史重开保持同一格式。
@@ -48,7 +48,7 @@ It combines local Whisper transcription, embedded local language models, and opt
   <img src="docs/images/product-screenshot.png" alt="澄稿原生 macOS 文稿工作台" width="85%">
 </p>
 
-当前版本：`1.21.5 (63)`。公开版本由根目录 `VERSION` 管理，内部构建号由
+当前版本：`1.21.6 (64)`。公开版本由根目录 `VERSION` 管理，内部构建号由
 `BUILD_NUMBER` 管理；每次功能更新必须先递增二者，再重新生成安装包。
 
 一个面向 macOS 26 的内容提取与改写应用。目标是在 Apple Silicon Mac 上完成网页读取、
@@ -88,7 +88,7 @@ It combines local Whisper transcription, embedded local language models, and opt
 - 最近处理可回看完整四页结果；最近 50 篇保存到 Application Support
 - 短视频按每 3–5 秒一个镜头给出时间码、对应口播和可直接复制的图像 AI 提示词
 - 长口播分段调用本地模型，原稿始终逐字保留，不受 4K 上下文截断
-- 无字幕、无可用音轨或转写过短时硬失败，不根据标题或简介编造正文
+- 无字幕或音轨转写过短时尝试读取视频帧中的真实标题与字幕；仍无可验证文字才硬失败，不根据链接标题或简介编造正文
 - 小模型结构化输出失败时自动生成基础整理稿，确保修改稿页不会只显示修改意见
 - 固定 SHA-256 的运行时、模型和许可证引导脚本
 - 2K/4K/8K 上下文可选；8GB 设备自动限制为最高 4K

@@ -11,14 +11,18 @@ struct WebAIChatClient: Sendable {
         self.configurationProvider = configurationProvider
     }
 
-    func complete(prompt: String) async throws -> OpenRouterCompletion {
+    func complete(
+        prompt: String,
+        timeout: Duration = .seconds(480)
+    ) async throws -> OpenRouterCompletion {
         let configuration = configurationProvider()
         guard configuration.isEnabled else {
             throw WebAIWebError.loginRequired(configuration.provider.title)
         }
         let content = try await completeOnMainActor(
             prompt: prompt,
-            provider: configuration.provider
+            provider: configuration.provider,
+            timeout: timeout
         )
         return OpenRouterCompletion(
             model: "\(configuration.provider.title) 网页会话",
@@ -29,9 +33,13 @@ struct WebAIChatClient: Sendable {
     @MainActor
     private func completeOnMainActor(
         prompt: String,
-        provider: WebAIProvider
+        provider: WebAIProvider,
+        timeout: Duration
     ) async throws -> String {
-        try await WebAIWebSessionPool.shared.session(for: provider).complete(markdownTask: prompt)
+        try await WebAIWebSessionPool.shared.session(for: provider).complete(
+            markdownTask: prompt,
+            timeout: timeout
+        )
     }
 }
 

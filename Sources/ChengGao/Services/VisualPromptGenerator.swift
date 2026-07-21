@@ -72,7 +72,7 @@ actor AdaptiveVisualPromptGenerator: VisualPromptGenerating {
                 visualStyle: visualStyle
             )
             let completion = if webConfigurationProvider().isEnabled {
-                try await webClient.complete(prompt: prompt)
+                try await webCompletionOrFallback(prompt: prompt)
             } else {
                 try await onlineClient.complete(prompt: prompt)
             }
@@ -96,6 +96,16 @@ actor AdaptiveVisualPromptGenerator: VisualPromptGenerating {
                 ? .templateFallback
                 : (designedCount == planned.count ? .onlineAI : .mixedAI)
         )
+    }
+
+    private func webCompletionOrFallback(prompt: String) async throws -> OpenRouterCompletion {
+        do {
+            return try await webClient.complete(prompt: prompt, timeout: .seconds(60))
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            return OpenRouterCompletion(model: "网页 AI 镜头模板后备", content: "")
+        }
     }
 }
 

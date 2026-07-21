@@ -97,9 +97,15 @@ actor LocalSpeechTranscriber: SpeechTranscribing {
             if !value.isEmpty { segments.append(value) }
         }
         let transcript = Self.cleanTranscript(segments.joined(separator: "\n"))
-        let minimum = min(200, max(40, (expectedDuration ?? 80) / 2))
+        let minimum = Self.minimumTranscriptCharacters(expectedDuration: expectedDuration)
         guard transcript.count >= minimum else { throw SpeechTranscriptionError.transcriptTooShort }
         return transcript
+    }
+
+    nonisolated static func minimumTranscriptCharacters(expectedDuration: Int?) -> Int {
+        guard let expectedDuration else { return 40 }
+        if expectedDuration <= 30 { return max(8, expectedDuration / 3) }
+        return min(200, max(40, expectedDuration / 2))
     }
 
     nonisolated static func convertToWhisperWAV(input: URL, output: URL) async throws {
