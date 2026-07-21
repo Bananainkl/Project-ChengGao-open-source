@@ -15,7 +15,7 @@
   <img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-2563eb">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-native-f05138?logo=swift&logoColor=white">
   <img alt="macOS 26" src="https://img.shields.io/badge/macOS-26-111827?logo=apple">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-144_passing-22c55e">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-146_passing-22c55e">
   <img alt="GitHub stars" src="https://img.shields.io/github/stars/Bananainkl/Project-ChengGao-open-source?style=flat">
 </p>
 
@@ -34,13 +34,14 @@ It combines local Whisper transcription, embedded local language models, and opt
 - 视频有字幕时直接提取；没有字幕时下载音轨并在本机使用 Whisper 转写。
 - 将网页正文、口播素材或研究结果整理为公众号、短视频、小红书或视频号文稿。
 - 在“原稿、逐段建议、修改稿、配图建议”之间保留完整可追溯链路。
+- 一键输出以短视频标题命名的文件包，统一带走改写文稿、逐镜提示词和已经生成的图片。
 - 8GB Mac 使用轻量模型保护模式，配置在线接口后也能使用在线优先与本地回退。
 
 <p align="center">
   <img src="docs/images/product-screenshot.png" alt="澄稿原生 macOS 文稿工作台" width="85%">
 </p>
 
-当前版本：`1.20.2 (55)`。公开版本由根目录 `VERSION` 管理，内部构建号由
+当前版本：`1.20.3 (56)`。公开版本由根目录 `VERSION` 管理，内部构建号由
 `BUILD_NUMBER` 管理；每次功能更新必须先递增二者，再重新生成安装包。
 
 一个面向 macOS 26 的内容提取与改写应用。目标是在 Apple Silicon Mac 上完成网页读取、
@@ -72,6 +73,7 @@ It combines local Whisper transcription, embedded local language models, and opt
 - 默认使用简体中文，可在处理前切换为繁体中文；生成后再执行一次简繁规范化
 - 修改稿页默认打开，处理完成后自动定位结果；四个结果分页使用固定高度的独立滚动视口
 - 支持按页复制、复制反馈、逐段进度和停止本地模型生成
+- 处理结果可一键输出以短视频标题命名的完整文件包，统一包含改写文稿、分镜提示词文档和已生成图片；同名目录不会覆盖
 - 改写采用“全文编辑蓝图 → 带前后文的分段改写 → 全文统稿与独立审稿”，短视频约 300 字一个语义块
 - 质量门逐段检查事实覆盖、日期／数字／信源锚点、全文三区覆盖、结构和相似度；遗漏后半篇时不会交付
 - 最近处理可回看完整四页结果；最近 50 篇保存到 Application Support

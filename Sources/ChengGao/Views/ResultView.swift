@@ -46,6 +46,7 @@ struct ResultView: View {
                         copyAllAction: { store.copyOutput(output) },
                         copyImagePromptAction: store.copyImagePrompt,
                         exportImageMarkdownAction: { store.exportChatGPTImageMarkdown(output) },
+                        exportPackageAction: { store.exportShortVideoPackage(output) },
                         saveDraftAction: { store.saveEditedDraft(title: $0, revisedBody: $1) },
                         canGenerateImages: store.canGenerateImages,
                         imageGenerationStatus: store.onlineImageGenerationStatus,

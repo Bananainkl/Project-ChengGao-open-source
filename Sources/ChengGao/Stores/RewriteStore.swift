@@ -1156,6 +1156,31 @@ final class RewriteStore {
         }
     }
 
+    func exportShortVideoPackage(_ output: RewriteOutput) {
+        let panel = NSOpenPanel()
+        panel.title = "选择短视频文件包的输出位置"
+        panel.message = "澄稿会在所选位置新建“\(ShortVideoExportPackage.packageFolderName(for: output.title))”文件夹，不会覆盖已有文件夹。"
+        panel.prompt = "输出到这里"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let directory = panel.url else { return }
+
+        do {
+            let result = try ShortVideoExportPackage.export(output: output, to: directory)
+            errorMessage = nil
+            if result.missingImageCount == 0 {
+                statusMessage = "文件包已输出 · 文稿、分镜和 \(result.copiedImageCount) 张图片"
+            } else {
+                statusMessage = "文件包已输出 · \(result.copiedImageCount) 张图片 · \(result.missingImageCount) 张待补"
+            }
+            NSWorkspace.shared.activateFileViewerSelecting([result.directoryURL])
+        } catch {
+            errorMessage = "输出文件包失败：\(error.localizedDescription)"
+        }
+    }
+
     func saveEditedDraft(title: String, revisedBody: String, historyID: UUID? = nil) {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanBody = revisedBody.trimmingCharacters(in: .whitespacesAndNewlines)

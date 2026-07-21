@@ -7,6 +7,7 @@ struct OutputView: View {
     let copyAllAction: () -> Void
     let copyImagePromptAction: (String) -> Void
     let exportImageMarkdownAction: () -> Void
+    let exportPackageAction: () -> Void
     let saveDraftAction: (String, String) -> Void
     let canGenerateImages: Bool
     let imageGenerationStatus: String
@@ -38,6 +39,15 @@ struct OutputView: View {
                             .foregroundStyle(.green)
                             .transition(.opacity)
                     }
+                    Button("输出", systemImage: "square.and.arrow.up") {
+                        exportPackageAction()
+                    }
+                    .disabled(isGeneratingAllImages || generatingImageShotID != nil)
+                    .help(
+                        isGeneratingAllImages || generatingImageShotID != nil
+                            ? "图片生成完成或停止后再输出，避免文件包遗漏正在生成的图片"
+                            : "选择目录，输出以短视频标题命名的文稿、分镜和图片文件包"
+                    )
                     Button {
                         copyPageAction(selectedPage)
                         showCopyFeedback("已复制本页")

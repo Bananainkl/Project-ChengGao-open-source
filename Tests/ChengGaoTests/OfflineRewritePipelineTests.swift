@@ -1890,6 +1890,85 @@ struct OfflineRewritePipelineTests {
         )
     }
 
+    @Test("Exports a title-named package with manuscript storyboard and available images")
+    func shortVideoPackageExport() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "chenggao-package-export-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let sourceImage = root.appending(path: "generated-source.png")
+        let imageBytes = Data([0x89, 0x50, 0x4E, 0x47])
+        try imageBytes.write(to: sourceImage)
+        let output = RewriteOutput(
+            title: "测试/短片:版本?", rawTranscript: "原稿", originalTranscript: "原稿",
+            corrections: [], suggestions: [], revisedBody: "这是改写完成的短视频文稿。", notes: "",
+            transcriptOrigin: .pastedText, style: .spoken,
+            visualStyle: .clayStopMotion,
+            visualShots: [
+                VisualShot(
+                    id: 0,
+                    timecode: "00:00–00:04",
+                    spokenContext: "第一段口播",
+                    prompt: "第一张完整提示词",
+                    generatedImagePath: sourceImage.path
+                ),
+                VisualShot(
+                    id: 1,
+                    timecode: "00:04–00:08",
+                    spokenContext: "第二段口播",
+                    prompt: "第二张完整提示词",
+                    generatedImagePath: root.appending(path: "missing.png").path
+                )
+            ]
+        )
+
+        let result = try ShortVideoExportPackage.export(output: output, to: root)
+
+        #expect(result.directoryURL.lastPathComponent == "测试-短片-版本")
+        #expect(result.copiedImageCount == 1)
+        #expect(result.missingImageCount == 1)
+        #expect(FileManager.default.fileExists(atPath: result.manuscriptURL.path))
+        #expect(FileManager.default.fileExists(atPath: result.storyboardURL.path))
+        let copiedImage = result.directoryURL.appending(path: "图片/01.png")
+        #expect(try Data(contentsOf: copiedImage) == imageBytes)
+
+        let manuscript = try String(contentsOf: result.manuscriptURL, encoding: .utf8)
+        let storyboard = try String(contentsOf: result.storyboardURL, encoding: .utf8)
+        #expect(manuscript.contains("这是改写完成的短视频文稿。"))
+        #expect(manuscript.contains("画面风格：粘土定格动画"))
+        #expect(storyboard.contains("已输出：[图片/01.png](图片/01.png)"))
+        #expect(storyboard.contains("未生成或原图片已不可用"))
+        #expect(storyboard.contains("第一张完整提示词"))
+        #expect(storyboard.contains("第二张完整提示词"))
+        #expect(!storyboard.contains(sourceImage.path))
+    }
+
+    @Test("Package export never overwrites an existing title folder")
+    func shortVideoPackageExportUsesUniqueFolder() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "chenggao-package-unique-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let output = RewriteOutput(
+            title: "同名短视频", rawTranscript: "原稿", originalTranscript: "原稿",
+            corrections: [], suggestions: [], revisedBody: "成稿", notes: "",
+            transcriptOrigin: .pastedText, style: .spoken,
+            visualShots: [
+                VisualShot(id: 0, timecode: "00:00–00:04", spokenContext: "文案", prompt: "提示词")
+            ]
+        )
+
+        let first = try ShortVideoExportPackage.export(output: output, to: root)
+        let marker = first.directoryURL.appending(path: "用户保留文件.txt")
+        try "保留".write(to: marker, atomically: true, encoding: .utf8)
+        let second = try ShortVideoExportPackage.export(output: output, to: root)
+
+        #expect(first.directoryURL.lastPathComponent == "同名短视频")
+        #expect(second.directoryURL.lastPathComponent == "同名短视频 (2)")
+        #expect(FileManager.default.fileExists(atPath: marker.path))
+    }
+
     @Test("Estimates a dense shot list for legacy short-video history")
     func legacyShotCadenceEstimate() {
         let output = RewriteOutput(

@@ -78,6 +78,7 @@ struct HistoryView: View {
                 copyAllAction: { store.copyOutput(item.output) },
                 copyImagePromptAction: store.copyImagePrompt,
                 exportImageMarkdownAction: { store.exportChatGPTImageMarkdown(item.output) },
+                exportPackageAction: { store.exportShortVideoPackage(item.output) },
                 saveDraftAction: {
                     store.saveEditedDraft(title: $0, revisedBody: $1, historyID: item.id)
                 },
