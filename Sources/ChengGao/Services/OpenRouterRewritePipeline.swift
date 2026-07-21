@@ -61,12 +61,25 @@ struct OpenRouterAPIClient: Sendable {
         self.reasoningEffortProvider = reasoningEffortProvider
     }
 
-    func complete(prompt: String) async throws -> OpenRouterCompletion {
-        try await complete(prompt: prompt, maximumTokens: 8_000, structuredOutput: true)
+    func complete(
+        prompt: String,
+        systemInstruction: String? = nil
+    ) async throws -> OpenRouterCompletion {
+        try await complete(
+            prompt: prompt,
+            maximumTokens: 8_000,
+            structuredOutput: true,
+            systemInstruction: systemInstruction
+        )
     }
 
     func testConnection() async throws -> OpenRouterCompletion {
-        try await complete(prompt: "连接测试：请只回复 OK。", maximumTokens: 16, structuredOutput: false)
+        try await complete(
+            prompt: "连接测试：请只回复 OK。",
+            maximumTokens: 16,
+            structuredOutput: false,
+            systemInstruction: nil
+        )
     }
 
     func completeWithImages(prompt: String, jpegImages: [Data]) async throws -> OpenRouterCompletion {
@@ -118,7 +131,8 @@ struct OpenRouterAPIClient: Sendable {
     private func complete(
         prompt: String,
         maximumTokens: Int,
-        structuredOutput: Bool
+        structuredOutput: Bool,
+        systemInstruction: String?
     ) async throws -> OpenRouterCompletion {
         try Task.checkCancellation()
         let configuration = configurationProvider()
@@ -142,7 +156,8 @@ struct OpenRouterAPIClient: Sendable {
             model: configuration.model,
             maximumTokens: maximumTokens,
             structuredOutput: false,
-            reasoningEffort: reasoningEffort
+            reasoningEffort: reasoningEffort,
+            systemInstruction: systemInstruction
         )
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -174,7 +189,8 @@ struct OpenRouterAPIClient: Sendable {
         model: String,
         maximumTokens: Int,
         structuredOutput: Bool,
-        reasoningEffort: OnlineAIReasoningEffort = .automatic
+        reasoningEffort: OnlineAIReasoningEffort = .automatic,
+        systemInstruction: String? = nil
     ) -> [String: Any] {
         let reasoningInstruction = reasoningEffort.promptInstruction
         var body: [String: Any] = [
@@ -182,7 +198,7 @@ struct OpenRouterAPIClient: Sendable {
             "messages": [
                 [
                     "role": "system",
-                    "content": "你是资深中文总编辑。严格保留事实，完成实质改写，只返回有效 JSON。\(reasoningInstruction.isEmpty ? "" : " \(reasoningInstruction)")"
+                    "content": "\(systemInstruction ?? "你是资深中文总编辑。严格保留事实，完成实质改写，只返回有效 JSON。")\(reasoningInstruction.isEmpty ? "" : " \(reasoningInstruction)")"
                 ],
                 ["role": "user", "content": prompt]
             ],
@@ -238,6 +254,12 @@ struct OpenRouterAPIClient: Sendable {
 actor OpenRouterRewritePipeline: RewriteProcessing {
     private let client: OpenRouterAPIClient
 
+    nonisolated static let rewriteOnlyRule = "最高优先级强制要求：本任务只做改写，不做缩写或摘要。改写时必须保证原稿的结构层次、内容、观点、论证关系和重要细节全部完整；可以重组结构与表达，但不得删减信息层次。成稿字数必须与原稿接近，并同时满足下方最低字数要求。若其他文体、节奏或精简要求与本条冲突，以本条为准。"
+
+    nonisolated static var rewriteSystemInstruction: String {
+        "你是资深中文总编辑。\(rewriteOnlyRule)严格保留事实，完成实质改写，只返回有效 JSON。"
+    }
+
     init(client: OpenRouterAPIClient = OpenRouterAPIClient()) {
         self.client = client
     }
@@ -254,11 +276,10 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
         let configuration = client.resolvedConfiguration()
         let reasoningEffort = client.resolvedReasoningEffort()
         progress(RewriteProgress(completed: 0, total: 2, message: "正在通过 \(configuration.provider.displayName) · \(reasoningEffort.displayName)推理通读全文并改写…"))
-        var completion = try await client.complete(prompt: Self.prompt(
-            material: material,
-            style: style,
-            language: language
-        ))
+        var completion = try await client.complete(
+            prompt: Self.prompt(material: material, style: style, language: language),
+            systemInstruction: Self.rewriteSystemInstruction
+        )
         var draft = try Self.parseDraft(
             completion.content,
             material: material,
@@ -273,13 +294,16 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
         )
         if !issues.isEmpty {
             progress(RewriteProgress(completed: 1, total: 2, message: "在线初稿未通过质量检查，正在重新统稿…"))
-            completion = try await client.complete(prompt: Self.retryPrompt(
-                material: material,
-                style: style,
-                language: language,
-                firstDraft: draft.revised,
-                issues: issues
-            ))
+            completion = try await client.complete(
+                prompt: Self.retryPrompt(
+                    material: material,
+                    style: style,
+                    language: language,
+                    firstDraft: draft.revised,
+                    issues: issues
+                ),
+                systemInstruction: Self.rewriteSystemInstruction
+            )
             draft = try Self.parseDraft(
                 completion.content,
                 material: material,
@@ -317,6 +341,8 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
         let sourceEvidence = sourceEvidence(for: material)
         return """
         请把下面的完整原稿改写为可直接发布的“\(style.rawValue)”。这是全文任务，不要逐段机械复述。
+
+        \(rewriteOnlyRule)
 
         要求：
         1. \(language.promptInstruction)
@@ -368,6 +394,7 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
         """
         return """
         上一版“\(style.rawValue)”未通过编辑质量检查：\(issues.joined(separator: "；"))。
+        \(rewriteOnlyRule)
         请重新通读原稿和上一版，完成一次真正的全文结构重写。必须保留事实，但要更换开头、信息顺序、段落结构和句式，消除逐句复述与拼接感。
         上一版 revised 约有 \(contentCharacterCount(firstDraft)) 个有效字符。\(lengthTargetInstruction(material: material, style: style))
         若上一版过短，必须逐项恢复原稿中被压缩的背景、原因、例子、过程、转折、限定条件和结论；不得用空洞重复、口号或虚构细节凑字数。

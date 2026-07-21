@@ -358,6 +358,23 @@ struct OfflineRewritePipelineTests {
         #expect(body["response_format"] == nil)
     }
 
+    @Test("完整改写硬规则会进入改写系统指令")
+    func rewriteOnlyRuleIsInSystemInstruction() {
+        let body = OpenRouterAPIClient.requestBody(
+            prompt: "改写测试",
+            model: "gpt-test",
+            maximumTokens: 16,
+            structuredOutput: false,
+            systemInstruction: OpenRouterRewritePipeline.rewriteSystemInstruction
+        )
+        let messages = body["messages"] as? [[String: String]]
+        let system = messages?.first?["content"] ?? ""
+        #expect(system.contains("只做改写，不做缩写或摘要"))
+        #expect(system.contains("结构层次、内容、观点、论证关系和重要细节全部完整"))
+        #expect(system.contains("成稿字数必须与原稿接近"))
+        #expect(system.contains("以本条为准"))
+    }
+
     @Test("Reasoning depth is persisted and added only when explicitly selected")
     func reasoningEffortRequestShape() {
         let suite = "ReasoningEffort-\(UUID().uuidString)"
@@ -728,6 +745,9 @@ struct OfflineRewritePipelineTests {
         #expect(prompt.contains("不要输出 corrected 字段"))
         #expect(prompt.contains("不得少于"))
         #expect(prompt.contains("不得把改写做成摘要"))
+        #expect(prompt.contains("只做改写，不做缩写或摘要"))
+        #expect(prompt.contains("结构层次、内容、观点、论证关系和重要细节全部完整"))
+        #expect(prompt.contains("成稿字数必须与原稿接近"))
         #expect(!prompt.contains(#""corrected":"仅纠错后的完整原稿""#))
     }
 
@@ -1262,6 +1282,8 @@ struct OfflineRewritePipelineTests {
         #expect(prompt.contains("上一版 revised 约有"))
         #expect(prompt.contains("不得少于"))
         #expect(prompt.contains("不得用空洞重复"))
+        #expect(prompt.contains("只做改写，不做缩写或摘要"))
+        #expect(prompt.contains("以本条为准"))
     }
 
     @Test("Custom compatible provider rejects incomplete pasted credentials")
