@@ -76,16 +76,27 @@ jobs:
           version="$(tr -d '[:space:]' < VERSION)"
           dmg="dist/ChengGao-${version}-macOS-arm64.dmg"
           checksum="${dmg}.sha256"
+          notes_file="${RUNNER_TEMP}/chenggao-release-notes.md"
+
+          cp RELEASE_NOTES.md "${notes_file}"
+          cat >>"${notes_file}" <<'NOTES'
+
+          ## 安装包说明
+
+          - DMG 面向 Apple Silicon（arm64），并包含本地 Whisper 语音识别模型与许可证。
+          - 当前 GitHub Actions 产物使用临时签名，尚未经过 Apple Developer ID 公证；首次打开请按照 DMG 内的安装说明操作。
+          - 下载后可使用同名 `.sha256` 文件核对安装包完整性。
+          NOTES
 
           if gh release view "${TARGET_TAG}" >/dev/null 2>&1; then
             gh release edit "${TARGET_TAG}" \
               --title "澄稿 ${TARGET_TAG}" \
-              --notes-file RELEASE_NOTES.md
+              --notes-file "${notes_file}"
           else
             gh release create "${TARGET_TAG}" \
               --verify-tag \
               --title "澄稿 ${TARGET_TAG}" \
-              --notes-file RELEASE_NOTES.md
+              --notes-file "${notes_file}"
           fi
 
           gh release upload "${TARGET_TAG}" "${dmg}" "${checksum}" --clobber
