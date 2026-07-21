@@ -12,8 +12,10 @@ struct OutputView: View {
     let canGenerateImages: Bool
     let imageGenerationStatus: String
     let generatingImageShotID: Int?
+    let generatingCoverFormat: CoverFormat?
     let isGeneratingAllImages: Bool
     let generateImageAction: (Int) -> Void
+    let generateCoverAction: (CoverFormat) -> Void
     let generateAllImagesAction: () -> Void
     let cancelImageGenerationAction: () -> Void
     let openGeneratedImageAction: (String) -> Void
@@ -115,14 +117,14 @@ struct OutputView: View {
             resetDraftEditor()
         }
         .confirmationDialog(
-            "批量生成 \(visualShots.count) 张图片？",
+            "批量生成 \(visualShots.count + coverArtworks.count) 张配图与封面？",
             isPresented: $showBatchImageConfirmation,
             titleVisibility: .visible
         ) {
             Button("开始批量生成") { generateAllImagesAction() }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("每张图片都会调用一次当前中转站的图片生成接口，可能产生费用。已经保存到本机的图片会自动跳过。")
+            Text("包含抖音竖版、横版封面和全部分镜。每张图片都会调用一次当前中转站的图片生成接口，可能产生费用；已保存到本机的图片会自动跳过。")
         }
     }
 
@@ -277,7 +279,7 @@ struct OutputView: View {
                         }
                         .disabled(visualShots.isEmpty)
                         .help("把全部提示词按每 10 张一批导出为可续跑的 Markdown 任务文档")
-                        Button("批量生成全部", systemImage: "photo.stack") {
+                        Button("批量生成封面与配图", systemImage: "photo.stack") {
                             showBatchImageConfirmation = true
                         }
                         .disabled(!canGenerateImages || visualShots.isEmpty)
@@ -290,6 +292,22 @@ struct OutputView: View {
                     tint: .accentColor,
                     tintOpacity: 0.045
                 )
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("抖音双封面", systemImage: "rectangle.on.rectangle.angled")
+                        .font(.headline)
+                    Text("根据标题与完整成稿设计 3:4 竖版和 16:9 横版背景，再由澄稿在本机排入准确标题，避免图片模型生成乱码。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(coverArtworks) { cover in
+                        coverCard(cover)
+                    }
+                }
+
+                Divider()
+
+                Label("分镜配图", systemImage: "timeline.selection")
+                    .font(.headline)
 
                 LazyVStack(spacing: 12) {
                     ForEach(visualShots) { shot in
@@ -371,6 +389,63 @@ struct OutputView: View {
         }
     }
 
+    private func coverCard(_ cover: CoverArtwork) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label("\(cover.format.title) · \(cover.format.aspectRatioLabel)", systemImage: "photo")
+                    .font(.headline)
+                Spacer()
+                Button(
+                    cover.generatedImagePath == nil ? "生成封面" : "重新生成",
+                    systemImage: cover.generatedImagePath == nil ? "photo.badge.plus" : "arrow.clockwise"
+                ) {
+                    generateCoverAction(cover.format)
+                }
+                .controlSize(.small)
+                .disabled(!canGenerateImages)
+                Button("复制提示词", systemImage: "doc.on.doc") {
+                    copyImagePromptAction(cover.prompt)
+                    showCopyFeedback("已复制封面提示词")
+                }
+                .controlSize(.small)
+            }
+            if generatingCoverFormat == cover.format {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在生成背景并排入准确标题…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let path = cover.generatedImagePath,
+               let image = NSImage(contentsOfFile: path) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 390)
+                    .background(.black.opacity(0.08), in: .rect(cornerRadius: 12))
+                    .clipShape(.rect(cornerRadius: 12))
+                HStack {
+                    Label("准确标题已在本机排版", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                    Spacer()
+                    Button("打开图片") { openGeneratedImageAction(path) }.controlSize(.small)
+                    Button("在访达中显示") { revealGeneratedImageAction(path) }.controlSize(.small)
+                }
+            }
+            Text("封面提示词")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tint)
+            Text(cover.prompt)
+                .foregroundStyle(.secondary)
+                .lineSpacing(4)
+                .textSelection(.enabled)
+        }
+        .padding(16)
+        .workspaceGlassInset(cornerRadius: 16)
+    }
+
     @ViewBuilder
     private func resultSection<Content: View>(
         number: String,
@@ -437,6 +512,10 @@ struct OutputView: View {
 
     private var visualShots: [VisualShot] {
         VisualShotPlanner.shots(for: output)
+    }
+
+    private var coverArtworks: [CoverArtwork] {
+        CoverArtworkPlanner.artworks(for: output)
     }
 
     private var visualSubtitle: String {

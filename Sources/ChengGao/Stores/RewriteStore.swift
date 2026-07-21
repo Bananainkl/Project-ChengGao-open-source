@@ -61,6 +61,7 @@ final class RewriteStore {
     var statusMessage = "请配置在线 AI"
     var errorMessage: String?
     private(set) var generatingImageShotID: Int?
+    private(set) var generatingCoverFormat: CoverFormat?
     private(set) var isGeneratingAllImages = false
 
     var effectiveContextLimit: Int {
@@ -318,6 +319,7 @@ final class RewriteStore {
                 )
                 try Task.checkCancellation()
                 result.visualShots = visualResult.shots
+                result.coverArtworks = CoverArtworkPlanner.artworks(for: result)
                 result.visualDesignSource = visualResult.source
                 result.notes += " 配图提示词来源：\(visualResult.source.label)。"
                 output = result
@@ -411,6 +413,9 @@ final class RewriteStore {
                 try Task.checkCancellation()
                 var updated = current
                 updated.visualShots = visualResult.shots
+                updated.coverArtworks = CoverArtworkPlanner.artworks(for: updated).map {
+                    CoverArtwork(format: $0.format, prompt: CoverArtworkPlanner.prompt(for: updated, format: $0.format))
+                }
                 updated.visualDesignSource = visualResult.source
                 updated.notes = Self.replacingVisualSourceNote(in: updated.notes, with: visualResult.source)
                 output = updated
@@ -500,6 +505,72 @@ final class RewriteStore {
         }
     }
 
+    func generateCover(_ format: CoverFormat, in current: RewriteOutput, historyID: UUID? = nil) {
+        guard !isGeneratingImages else { return }
+        let configuration = currentImageGenerationConfiguration
+        guard configuration.isValid(fallbackChatEndpoint: onlineEndpointDraft) else {
+            errorMessage = ImageGenerationError.invalidConfiguration.localizedDescription
+            onlineImageGenerationStatus = "图片生成设置不完整"
+            return
+        }
+        guard let key = OnlineImageCredentialStore.load(
+            for: onlineProvider,
+            serviceName: imageCredentialServiceName
+        ), !key.isEmpty else {
+            errorMessage = ImageGenerationError.missingAPIKey.localizedDescription
+            onlineImageGenerationStatus = "还没有单独保存图片 API Key"
+            return
+        }
+        let covers = CoverArtworkPlanner.artworks(for: current)
+        guard let cover = covers.first(where: { $0.format == format }) else { return }
+
+        let fallbackChatEndpoint = onlineEndpointDraft
+        let resolvedHistoryID = historyID ?? history.first(where: { $0.output == current })?.id
+        let storageID = resolvedHistoryID ?? UUID()
+        let updatesCurrentOutput = historyID == nil || output == current
+        generatingCoverFormat = format
+        onlineImageGenerationStatus = "正在生成(format.title)…"
+        errorMessage = nil
+
+        imageGenerationTask = Task {
+            do {
+                let payload = try await imageGenerator.generate(
+                    prompt: cover.prompt,
+                    style: current.style,
+                    configuration: imageConfiguration(configuration, for: format),
+                    fallbackChatEndpoint: fallbackChatEndpoint,
+                    apiKey: key
+                )
+                try Task.checkCancellation()
+                let path = try saveGeneratedCover(
+                    payload,
+                    title: current.title,
+                    historyID: storageID,
+                    format: format
+                )
+                var updated = current
+                var updatedCovers = covers
+                if let index = updatedCovers.firstIndex(where: { $0.format == format }) {
+                    updatedCovers[index].generatedImagePath = path
+                }
+                updated.coverArtworks = updatedCovers
+                persistGeneratedImages(
+                    updated,
+                    historyID: resolvedHistoryID,
+                    updateCurrentOutput: updatesCurrentOutput
+                )
+                onlineImageGenerationStatus = "(format.title)已生成并保存"
+            } catch is CancellationError {
+                onlineImageGenerationStatus = "封面生成已停止"
+            } catch {
+                errorMessage = error.localizedDescription
+                onlineImageGenerationStatus = "(format.title)生成失败"
+            }
+            generatingCoverFormat = nil
+            imageGenerationTask = nil
+        }
+    }
+
     func generateAllImages(in current: RewriteOutput, historyID: UUID? = nil) {
         guard !isGeneratingImages else { return }
         let configuration = currentImageGenerationConfiguration
@@ -517,7 +588,8 @@ final class RewriteStore {
             return
         }
         let originalShots = VisualShotPlanner.shots(for: current)
-        guard !originalShots.isEmpty else { return }
+        let originalCovers = CoverArtworkPlanner.artworks(for: current)
+        guard !originalShots.isEmpty || !originalCovers.isEmpty else { return }
 
         let fallbackChatEndpoint = onlineEndpointDraft
         let resolvedHistoryID = historyID ?? history.first(where: { $0.output == current })?.id
@@ -525,13 +597,57 @@ final class RewriteStore {
         let updatesCurrentOutput = historyID == nil || output == current
         isGeneratingAllImages = true
         errorMessage = nil
-        onlineImageGenerationStatus = "准备批量生成 \(originalShots.count) 张图片…"
+        let total = originalShots.count + originalCovers.count
+        onlineImageGenerationStatus = "准备批量生成 \(total) 张配图与封面…"
 
         imageGenerationTask = Task {
             var updated = current
             var shots = originalShots
+            var covers = originalCovers
             var completed = 0
             var failures: [String] = []
+            for (index, cover) in covers.enumerated() {
+                do {
+                    try Task.checkCancellation()
+                    if let path = cover.generatedImagePath,
+                       FileManager.default.fileExists(atPath: path) {
+                        completed += 1
+                        continue
+                    }
+                    generatingCoverFormat = cover.format
+                    onlineImageGenerationStatus = "正在生成 \(completed + 1)/\(total) · \(cover.format.title)…"
+                    let payload = try await imageGenerator.generate(
+                        prompt: cover.prompt,
+                        style: current.style,
+                        configuration: imageConfiguration(configuration, for: cover.format),
+                        fallbackChatEndpoint: fallbackChatEndpoint,
+                        apiKey: key
+                    )
+                    let path = try saveGeneratedCover(
+                        payload,
+                        title: current.title,
+                        historyID: storageID,
+                        format: cover.format
+                    )
+                    covers[index].generatedImagePath = path
+                    updated.coverArtworks = covers
+                    persistGeneratedImages(
+                        updated,
+                        historyID: resolvedHistoryID,
+                        updateCurrentOutput: updatesCurrentOutput
+                    )
+                    completed += 1
+                } catch is CancellationError {
+                    onlineImageGenerationStatus = "批量图片生成已停止 · 已完成 \(completed) 张"
+                    generatingCoverFormat = nil
+                    isGeneratingAllImages = false
+                    imageGenerationTask = nil
+                    return
+                } catch {
+                    failures.append("\(cover.format.title)：\(error.localizedDescription)")
+                }
+            }
+            generatingCoverFormat = nil
             for (index, shot) in shots.enumerated() {
                 do {
                     try Task.checkCancellation()
@@ -541,7 +657,7 @@ final class RewriteStore {
                         continue
                     }
                     generatingImageShotID = shot.id
-                    onlineImageGenerationStatus = "正在生成第 \(index + 1)/\(shots.count) 张图片…"
+                    onlineImageGenerationStatus = "正在生成 \(completed + 1)/\(total) · 分镜 \(index + 1)…"
                     let payload = try await imageGenerator.generate(
                         prompt: shot.prompt,
                         style: current.style,
@@ -561,6 +677,7 @@ final class RewriteStore {
                 } catch is CancellationError {
                     onlineImageGenerationStatus = "批量图片生成已停止 · 已完成 \(completed) 张"
                     generatingImageShotID = nil
+                    generatingCoverFormat = nil
                     isGeneratingAllImages = false
                     imageGenerationTask = nil
                     return
@@ -569,12 +686,13 @@ final class RewriteStore {
                 }
             }
             generatingImageShotID = nil
+            generatingCoverFormat = nil
             isGeneratingAllImages = false
             imageGenerationTask = nil
             if failures.isEmpty {
-                onlineImageGenerationStatus = "全部图片已生成并保存 · 共 \(completed) 张"
+                onlineImageGenerationStatus = "全部配图与封面已生成并保存 · 共 \(completed) 张"
             } else {
-                onlineImageGenerationStatus = "批量完成 \(completed)/\(shots.count) 张"
+                onlineImageGenerationStatus = "批量完成 \(completed)/\(total) 张"
                 errorMessage = failures.joined(separator: "\n")
             }
         }
@@ -617,6 +735,40 @@ final class RewriteStore {
         let fileURL = directory.appending(path: filename)
         try payload.data.write(to: fileURL, options: .atomic)
         return fileURL.path
+    }
+
+    private func saveGeneratedCover(
+        _ payload: GeneratedImagePayload,
+        title: String,
+        historyID: UUID,
+        format: CoverFormat
+    ) throws -> String {
+        let directory = historyURL.deletingLastPathComponent()
+            .appending(path: "GeneratedImages", directoryHint: .isDirectory)
+            .appending(path: historyID.uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let data = try CoverArtworkRenderer.render(
+            backgroundData: payload.data,
+            title: title,
+            format: format
+        )
+        let filename = "cover-\(format.rawValue)-\(UUID().uuidString).png"
+        let fileURL = directory.appending(path: filename)
+        try data.write(to: fileURL, options: .atomic)
+        return fileURL.path
+    }
+
+    private func imageConfiguration(
+        _ configuration: OnlineImageGenerationConfiguration,
+        for format: CoverFormat
+    ) -> OnlineImageGenerationConfiguration {
+        OnlineImageGenerationConfiguration(
+            provider: configuration.provider,
+            endpoint: configuration.endpoint,
+            model: configuration.model,
+            size: format.imageGenerationSize,
+            quality: configuration.quality
+        )
     }
 
     private func persistGeneratedImages(
@@ -696,11 +848,12 @@ final class RewriteStore {
         hasOnlineImageAPIKey
             && currentImageGenerationConfiguration.isValid(fallbackChatEndpoint: onlineEndpointDraft)
             && generatingImageShotID == nil
+            && generatingCoverFormat == nil
             && !isGeneratingAllImages
     }
 
     var isGeneratingImages: Bool {
-        generatingImageShotID != nil || isGeneratingAllImages
+        generatingImageShotID != nil || generatingCoverFormat != nil || isGeneratingAllImages
     }
 
     var onlineModelChoices: [String] {
@@ -1135,7 +1288,8 @@ final class RewriteStore {
 
     func exportChatGPTImageMarkdown(_ output: RewriteOutput) {
         let shots = VisualShotPlanner.shots(for: output)
-        guard !shots.isEmpty else {
+        let covers = CoverArtworkPlanner.artworks(for: output)
+        guard !shots.isEmpty || !covers.isEmpty else {
             errorMessage = "当前结果没有可导出的配图提示词。"
             return
         }
@@ -1150,7 +1304,7 @@ final class RewriteStore {
             try ChatGPTImageBatchDocument.render(output: output)
                 .write(to: url, atomically: true, encoding: .utf8)
             errorMessage = nil
-            statusMessage = "已导出 ChatGPT 生图队列 · 共 \(shots.count) 张 · 每 10 张一批"
+            statusMessage = "已导出 ChatGPT 生图队列 · 2 张封面 + \(shots.count) 张分镜 · 每 10 张一批"
         } catch {
             errorMessage = "导出失败：\(error.localizedDescription)"
         }
@@ -1170,10 +1324,10 @@ final class RewriteStore {
         do {
             let result = try ShortVideoExportPackage.export(output: output, to: directory)
             errorMessage = nil
-            if result.missingImageCount == 0 {
-                statusMessage = "文件包已输出 · 文稿、分镜和 \(result.copiedImageCount) 张图片"
+            if result.missingImageCount == 0, result.missingCoverCount == 0 {
+                statusMessage = "文件包已输出 · 文稿、双封面和 \(result.copiedImageCount) 张分镜图"
             } else {
-                statusMessage = "文件包已输出 · \(result.copiedImageCount) 张图片 · \(result.missingImageCount) 张待补"
+                statusMessage = "文件包已输出 · \(result.copiedImageCount) 张分镜图 · \(result.missingImageCount) 张分镜待补 · \(result.missingCoverCount) 张封面待补"
             }
             NSWorkspace.shared.activateFileViewerSelecting([result.directoryURL])
         } catch {
@@ -1196,6 +1350,14 @@ final class RewriteStore {
         edited.revisedBody = current.style == .spoken
             ? SpokenSubtitleFormatter.format(cleanBody)
             : cleanBody
+        if cleanTitle != current.title || edited.revisedBody != current.revisedBody {
+            edited.coverArtworks = CoverArtworkPlanner.artworks(for: edited).map {
+                CoverArtwork(
+                    format: $0.format,
+                    prompt: CoverArtworkPlanner.prompt(for: edited, format: $0.format)
+                )
+            }
+        }
         if !edited.notes.contains("用户手动编辑") {
             edited.notes += " 成稿已由用户手动编辑。"
         }
@@ -1249,9 +1411,13 @@ final class RewriteStore {
     }
 
     private func visualsText(for output: RewriteOutput) -> String {
-        VisualShotPlanner.shots(for: output).enumerated().map { index, shot in
+        let covers = CoverArtworkPlanner.artworks(for: output).map { cover in
+            "\(cover.format.title)（\(cover.format.aspectRatioLabel)）\n封面提示词：\(cover.prompt)"
+        }.joined(separator: "\n\n")
+        let shots = VisualShotPlanner.shots(for: output).enumerated().map { index, shot in
             "镜头 \(index + 1)\n时间：\(shot.timecode)\n对应口播：\(shot.spokenContext)\nAI 绘图提示词：\(shot.prompt)"
         }.joined(separator: "\n\n")
+        return [covers, shots].filter { !$0.isEmpty }.joined(separator: "\n\n")
     }
 
     private func originalHeading(for output: RewriteOutput) -> String {

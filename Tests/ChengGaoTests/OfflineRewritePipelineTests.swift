@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import Testing
+@preconcurrency import WebKit
 @testable import ChengGao
 
 private struct ResearchSearchStub: ResearchSearching {
@@ -1831,20 +1833,68 @@ struct OfflineRewritePipelineTests {
         let markdown = ChatGPTImageBatchDocument.render(output: output)
 
         #expect(markdown.contains("# 测试图文｜ChatGPT 批量生图任务"))
-        #expect(markdown.contains("共 2 张图片、1 批，每批最多 10 张"))
+        #expect(markdown.contains("共 4 张图片、1 批，每批最多 10 张"))
         #expect(markdown.contains("禁止把多个编号合并成拼图"))
         #expect(markdown.contains("首次读取本文档时只执行第 1 批"))
-        #expect(markdown.contains("- 统一比例：3:4 竖版"))
+        #expect(markdown.contains("- 封面：抖音竖版 3:4 + 横版 16:9"))
+        #expect(markdown.contains("- 分镜比例：3:4 竖版"))
         #expect(markdown.contains("- 画面风格：手绘漫画"))
         #expect(markdown.contains("纸张纤维"))
         #expect(markdown.contains("- [ ] 图片 01"))
         #expect(markdown.contains("- [ ] 图片 02"))
-        #expect(markdown.contains("## 第 1 批｜图片 01–02"))
-        #expect(markdown.contains("### 图片 01｜图文 1 · 封面"))
+        #expect(markdown.contains("## 第 1 批｜图片 01–04"))
+        #expect(markdown.contains("### 图片 01｜抖音竖版封面"))
+        #expect(markdown.contains("### 图片 02｜抖音横版封面"))
+        #expect(markdown.contains("### 图片 03｜图文 1 · 封面"))
         #expect(markdown.contains("> 第一张对应文案"))
         #expect(markdown.contains("> 第一张完整提示词"))
         #expect(markdown.contains("> 第二张完整提示词"))
         #expect(!markdown.contains("/private/tmp/already-generated.png"))
+    }
+
+    @Test("Builds distinct Douyin cover prompts from the title, body and visual style")
+    func coverArtworkPrompts() {
+        let output = RewriteOutput(
+            title: "别在混乱系统里持续内耗",
+            rawTranscript: "原稿", originalTranscript: "原稿",
+            corrections: [], suggestions: [],
+            revisedBody: "真正消耗人的不是任务本身，而是责任边界不清和反复返工。", notes: "",
+            transcriptOrigin: .pastedText, style: .spoken,
+            visualStyle: .clayStopMotion
+        )
+
+        let covers = CoverArtworkPlanner.artworks(for: output)
+
+        #expect(covers.map(\.format) == [.douyinPortrait, .douyinLandscape])
+        #expect(covers[0].prompt.contains(output.title))
+        #expect(covers[0].prompt.contains("责任边界不清"))
+        #expect(covers[0].prompt.contains("3:4 竖版"))
+        #expect(covers[1].prompt.contains("16:9 横版"))
+        #expect(covers.allSatisfy { $0.prompt.contains("粘土木偶") })
+        #expect(covers.allSatisfy { $0.prompt.contains("不要生成任何文字") })
+    }
+
+    @Test("Renders exact portrait and landscape cover canvases with local title typography")
+    func coverArtworkRendering() throws {
+        let source = NSImage(size: CGSize(width: 120, height: 180))
+        source.lockFocus()
+        NSColor.systemBlue.setFill()
+        NSBezierPath(rect: CGRect(x: 0, y: 0, width: 120, height: 180)).fill()
+        source.unlockFocus()
+        let tiff = try #require(source.tiffRepresentation)
+        let bitmap = try #require(NSBitmapImageRep(data: tiff))
+        let sourcePNG = try #require(bitmap.representation(using: .png, properties: [:]))
+
+        for format in CoverFormat.allCases {
+            let rendered = try CoverArtworkRenderer.render(
+                backgroundData: sourcePNG,
+                title: "准确的中文标题",
+                format: format
+            )
+            let result = try #require(NSBitmapImageRep(data: rendered))
+            #expect(result.pixelsWide == Int(format.canvasSize.width))
+            #expect(result.pixelsHigh == Int(format.canvasSize.height))
+        }
     }
 
     @Test("Splits ChatGPT image tasks into explicit groups of ten")
@@ -1865,14 +1915,14 @@ struct OfflineRewritePipelineTests {
 
         let markdown = ChatGPTImageBatchDocument.render(output: output)
 
-        #expect(markdown.contains("共 12 张图片、2 批，每批最多 10 张"))
+        #expect(markdown.contains("共 14 张图片、2 批，每批最多 10 张"))
         #expect(markdown.contains("- [ ] 第 1 批：图片 01–10（10 张；首次读取自动执行）"))
-        #expect(markdown.contains("- [ ] 第 2 批：图片 11–12（2 张；口令：继续第 2 批）"))
+        #expect(markdown.contains("- [ ] 第 2 批：图片 11–14（4 张；口令：继续第 2 批）"))
         #expect(markdown.contains("## 第 1 批｜图片 01–10"))
-        #expect(markdown.contains("## 第 2 批｜图片 11–12"))
+        #expect(markdown.contains("## 第 2 批｜图片 11–14"))
         #expect(markdown.contains("第 1 批已完成（图片 01–10）。请回复：继续第 2 批。"))
-        #expect(markdown.contains("全部 12 张图片已完成。"))
-        #expect(markdown.components(separatedBy: "\n### 图片 ").count - 1 == 12)
+        #expect(markdown.contains("全部 14 张图片已完成。"))
+        #expect(markdown.components(separatedBy: "\n### 图片 ").count - 1 == 14)
     }
 
     @Test("Sanitizes the default Markdown export filename")
@@ -1964,6 +2014,14 @@ struct OfflineRewritePipelineTests {
                     prompt: "第二张完整提示词",
                     generatedImagePath: root.appending(path: "missing.png").path
                 )
+            ],
+            coverArtworks: [
+                CoverArtwork(
+                    format: .douyinPortrait,
+                    prompt: "竖版封面提示词",
+                    generatedImagePath: sourceImage.path
+                ),
+                CoverArtwork(format: .douyinLandscape, prompt: "横版封面提示词")
             ]
         )
 
@@ -1972,12 +2030,16 @@ struct OfflineRewritePipelineTests {
         #expect(result.directoryURL.lastPathComponent == "测试-短片-版本")
         #expect(result.copiedImageCount == 1)
         #expect(result.missingImageCount == 1)
+        #expect(result.copiedCoverCount == 1)
+        #expect(result.missingCoverCount == 1)
         #expect(FileManager.default.fileExists(atPath: result.manuscriptURL.path))
         #expect(FileManager.default.fileExists(atPath: result.storyboardURL.path))
         #expect(result.subtitleTextURL != nil)
         #expect(FileManager.default.fileExists(atPath: result.subtitleTextURL?.path ?? ""))
         let copiedImage = result.directoryURL.appending(path: "图片/01.png")
         #expect(try Data(contentsOf: copiedImage) == imageBytes)
+        let copiedCover = result.directoryURL.appending(path: "封面/抖音竖版封面-3x4.png")
+        #expect(try Data(contentsOf: copiedCover) == imageBytes)
 
         let manuscript = try String(contentsOf: result.manuscriptURL, encoding: .utf8)
         let storyboard = try String(contentsOf: result.storyboardURL, encoding: .utf8)
@@ -1990,6 +2052,9 @@ struct OfflineRewritePipelineTests {
         #expect(storyboard.contains("未生成或原图片已不可用"))
         #expect(storyboard.contains("第一张完整提示词"))
         #expect(storyboard.contains("第二张完整提示词"))
+        #expect(storyboard.contains("竖版封面提示词"))
+        #expect(storyboard.contains("横版封面提示词"))
+        #expect(storyboard.contains("已输出：[封面/抖音竖版封面-3x4.png]"))
         #expect(!storyboard.contains(sourceImage.path))
     }
 
@@ -2637,6 +2702,32 @@ struct OfflineRewritePipelineTests {
         #expect(value.title == "隐藏字符串里的抖音结果")
         #expect(value.likeCount == 3_200)
         #expect(value.coverURL?.absoluteString == "https://p3.douyinpic.com/embedded.jpeg")
+    }
+
+    @Test("Douyin capture accepts prefixed JSON and alternate video identifiers")
+    func douyinPrefixedCapturedResponseNormalization() throws {
+        let body = #"for(;;);{"data":{"items":[{"videoIdStr":"7598765432109876543","videoTitle":"客户机页面里的职场内耗结果","videoInfo":{"cover":{"urlList":["https://p3.douyinpic.com/client.jpeg"]}},"statisticsInfo":{"diggCount":4567}}]}}"#
+        let payload = String(decoding: try JSONEncoder().encode([body]), as: UTF8.self)
+
+        let value = try #require(WebKitResearchSearchService.capturedResponseContents(
+            payload: payload, platform: .douyin, keyword: "职场内耗", maxItems: 20, recentDays: 30
+        ).first)
+
+        #expect(value.platformContentID == "7598765432109876543")
+        #expect(value.title == "客户机页面里的职场内耗结果")
+        #expect(value.likeCount == 4_567)
+        #expect(value.coverURL?.absoluteString == "https://p3.douyinpic.com/client.jpeg")
+    }
+
+    @Test("Douyin rendered fallback remains valid JavaScript")
+    @MainActor
+    func douyinRenderedFallbackJavaScript() async throws {
+        let webView = WKWebView(frame: .zero)
+        webView.loadHTMLString("<html><body></body></html>", baseURL: URL(string: "https://www.douyin.com/search/test"))
+        try await Task.sleep(for: .milliseconds(200))
+        let script = WebKitResearchSearchService.extractionScript(platform: .douyin, maxItems: 20)
+        let value = try await webView.evaluateJavaScript(script)
+        #expect(value as? String == "[]")
     }
 
     @Test("Xiaohongshu search URL avoids the redirect loop")

@@ -287,6 +287,49 @@ struct VisualShot: Identifiable, Equatable, Codable, Sendable {
     var generatedImagePath: String? = nil
 }
 
+enum CoverFormat: String, CaseIterable, Identifiable, Codable, Sendable {
+    case douyinPortrait
+    case douyinLandscape
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .douyinPortrait: "抖音竖版封面"
+        case .douyinLandscape: "抖音横版封面"
+        }
+    }
+
+    var aspectRatioLabel: String {
+        switch self {
+        case .douyinPortrait: "3:4 竖版"
+        case .douyinLandscape: "16:9 横版"
+        }
+    }
+
+    var canvasSize: CGSize {
+        switch self {
+        case .douyinPortrait: CGSize(width: 1_080, height: 1_440)
+        case .douyinLandscape: CGSize(width: 1_600, height: 900)
+        }
+    }
+
+    var imageGenerationSize: OnlineImageGenerationSize {
+        switch self {
+        case .douyinPortrait: .portrait
+        case .douyinLandscape: .landscape
+        }
+    }
+}
+
+struct CoverArtwork: Identifiable, Equatable, Codable, Sendable {
+    var format: CoverFormat
+    var prompt: String
+    var generatedImagePath: String? = nil
+
+    var id: CoverFormat { format }
+}
+
 enum VisualShotPlanner {
     static func shots(for output: RewriteOutput) -> [VisualShot] {
         if let designed = output.visualShots, !designed.isEmpty {
@@ -628,6 +671,7 @@ struct RewriteOutput: Equatable, Codable, Sendable {
     var visualStyle: VisualStyle? = nil
     var durationSeconds: Int? = nil
     var visualShots: [VisualShot]? = nil
+    var coverArtworks: [CoverArtwork]? = nil
     var visualDesignSource: VisualDesignSource? = nil
     var sourceVisualReferences: [SourceVisualReference]? = nil
     var sourceContentKind: ResearchContentKind? = nil

@@ -286,18 +286,29 @@ struct WebKitResearchSearchService {
             guard inspected < 80_000, records.count < max(1, maxItems) else { return }
             inspected += 1
             if let dictionary = value as? [String: Any] {
-                let directIdentifier = firstString(in: dictionary, keys: ["aweme_id", "awemeId"])
+                let directIdentifier = firstString(in: dictionary, keys: [
+                    "aweme_id", "awemeId", "aweme_id_str", "awemeIdStr",
+                    "video_id", "videoId", "video_id_str", "videoIdStr"
+                ])
                 let hasVideoEvidence = dictionary["video"] != nil
                     || dictionary["video_info"] != nil
+                    || dictionary["videoInfo"] != nil
                     || dictionary["statistics"] != nil
                     || dictionary["statistics_info"] != nil
+                    || dictionary["statisticsInfo"] != nil
                 let identifier = directIdentifier ?? (hasVideoEvidence ? firstString(
                     in: dictionary,
-                    keys: ["group_id", "groupId", "item_id", "itemId", "id_str", "idStr"]
+                    keys: [
+                        "group_id", "groupId", "group_id_str", "groupIdStr",
+                        "item_id", "itemId", "item_id_str", "itemIdStr", "id_str", "idStr"
+                    ]
                 ) : nil)
                 let title = firstString(
                     in: dictionary,
-                    keys: ["desc", "title", "caption", "content_desc", "contentDesc"]
+                    keys: [
+                        "desc", "title", "caption", "content_desc", "contentDesc",
+                        "video_title", "videoTitle", "text"
+                    ]
                 )
                 if let identifier,
                    identifier.range(of: #"^[0-9]+$"#, options: .regularExpression) != nil,
@@ -310,10 +321,12 @@ struct WebKitResearchSearchService {
                         ?? [:]
                     let videoObject = (dictionary["video"] as? [String: Any])
                         ?? (dictionary["video_info"] as? [String: Any])
+                        ?? (dictionary["videoInfo"] as? [String: Any])
                         ?? [:]
                     let stats = (dictionary["statistics"] as? [String: Any])
                         ?? (dictionary["stats"] as? [String: Any])
                         ?? (dictionary["statistics_info"] as? [String: Any])
+                        ?? (dictionary["statisticsInfo"] as? [String: Any])
                         ?? [:]
                     let coverValue = videoObject["cover"]
                         ?? videoObject["origin_cover"]
@@ -347,8 +360,7 @@ struct WebKitResearchSearchService {
         }
 
         for body in bodies {
-            guard let data = body.data(using: .utf8),
-                  let object = try? JSONSerialization.jsonObject(with: data) else { continue }
+            guard let object = capturedJSONObject(body) else { continue }
             walk(object)
             if records.count >= max(1, maxItems) { break }
         }
@@ -361,6 +373,19 @@ struct WebKitResearchSearchService {
             recentDays: recentDays,
             now: now
         )
+    }
+
+    nonisolated private static func capturedJSONObject(_ body: String) -> Any? {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let data = trimmed.data(using: .utf8),
+           let object = try? JSONSerialization.jsonObject(with: data) {
+            return object
+        }
+        guard let start = trimmed.firstIndex(where: { $0 == "{" || $0 == "[" }),
+              let end = trimmed.lastIndex(where: { $0 == "}" || $0 == "]" }),
+              start < end,
+              let data = String(trimmed[start...end]).data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data)
     }
 
     nonisolated private static func xiaohongshuCapturedContents(
@@ -607,7 +632,7 @@ struct WebKitResearchSearchService {
     }
 
     @MainActor
-    private static func extractionScript(platform: ResearchPlatform, maxItems: Int) -> String {
+    static func extractionScript(platform: ResearchPlatform, maxItems: Int) -> String {
         let platformValue = quotedJavaScript(platform.rawValue)
         return """
         (() => {
@@ -678,15 +703,15 @@ struct WebKitResearchSearchService {
               if (!node || typeof node !== 'object' || visited.has(node) || inspected > 80000 || results.length >= limit) return;
               visited.add(node);
               inspected += 1;
-              const directID = textValue(node.aweme_id || node.awemeId);
-              const hasVideoEvidence = !!(node.video || node.video_info || node.statistics || node.statistics_info);
-              const id = directID || (hasVideoEvidence ? textValue(node.group_id || node.groupId || node.item_id || node.itemId || node.id_str || node.idStr) : '');
-              const title = textValue(node.desc || node.title || node.caption || node.content_desc || node.contentDesc);
+              const directID = textValue(node.aweme_id || node.awemeId || node.aweme_id_str || node.awemeIdStr || node.video_id || node.videoId || node.video_id_str || node.videoIdStr);
+              const hasVideoEvidence = !!(node.video || node.video_info || node.videoInfo || node.statistics || node.statistics_info || node.statisticsInfo);
+              const id = directID || (hasVideoEvidence ? textValue(node.group_id || node.groupId || node.group_id_str || node.groupIdStr || node.item_id || node.itemId || node.item_id_str || node.itemIdStr || node.id_str || node.idStr) : '');
+              const title = textValue(node.desc || node.title || node.caption || node.content_desc || node.contentDesc || node.video_title || node.videoTitle || node.text);
               if (/^[0-9]+$/.test(id) && title.length >= 2) {
                 const authorObject = node.author || node.author_info || node.user || {};
-                const videoObject = node.video || node.video_info || {};
+                const videoObject = node.video || node.video_info || node.videoInfo || {};
                 const coverObject = videoObject.cover || videoObject.origin_cover || videoObject.dynamic_cover || node.cover;
-                const stats = node.statistics || node.stats || node.statistics_info || {};
+                const stats = node.statistics || node.stats || node.statistics_info || node.statisticsInfo || {};
                 append({
                   url: 'https://www.douyin.com/video/' + id,
                   title, coverURL: firstURL(coverObject),
@@ -705,6 +730,34 @@ struct WebKitResearchSearchService {
                 for (const key of Object.keys(node)) walk(node[key]);
               }
             };
+            const idFromMarkup = (value) => {
+              const patterns = [
+                /(?:aweme_id|awemeId|aweme_id_str|awemeIdStr|modal_id|video_id|videoId)[^0-9]{0,24}([0-9]{12,})/,
+                /\\/video\\/([0-9]{12,})/,
+                /(?:group_id|groupId|item_id|itemId)[^0-9]{0,24}([0-9]{12,})/
+              ];
+              for (const pattern of patterns) {
+                const match = String(value || '').match(pattern);
+                if (match) return match[1];
+              }
+              return '';
+            };
+            const cardSelector = '[data-e2e*="search"], [data-e2e*="video"], [data-aweme-id], [data-item-id], [class*="search-result"], [class*="video-card"]';
+            for (const card of document.querySelectorAll(cardSelector)) {
+              if (results.length >= limit) break;
+              const markup = Array.from(card.attributes || []).map(value => value.name + '=' + value.value).join(' ') + ' ' + card.outerHTML.slice(0, 12000);
+              const id = idFromMarkup(markup);
+              if (!id) continue;
+              const titled = card.querySelector('[title], [aria-label], h1, h2, h3, [role="heading"]');
+              const lines = String(card.innerText || '').split('\\n').map(value => value.trim()).filter(value => value.length >= 2);
+              const title = String((titled && (titled.getAttribute('title') || titled.getAttribute('aria-label') || titled.innerText)) || lines[0] || '').trim();
+              const image = card.querySelector('img');
+              append({
+                url: 'https://www.douyin.com/video/' + id,
+                title, context: lines.slice(0, 8).join('\\n'),
+                coverURL: image ? (image.currentSrc || image.src || null) : null
+              });
+            }
             [window._ROUTER_DATA, window.__INITIAL_STATE__, window.__NEXT_DATA__, window.__SSR_DATA__, window.__RENDER_DATA__].forEach(walk);
             for (const script of document.querySelectorAll('script[type="application/json"], script[id*="RENDER_DATA"], script[id*="NEXT_DATA"]')) {
               const raw = script.textContent || '';

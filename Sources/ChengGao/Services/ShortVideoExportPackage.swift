@@ -7,6 +7,8 @@ struct ShortVideoExportPackageResult: Equatable, Sendable {
     let subtitleTextURL: URL?
     let copiedImageCount: Int
     let missingImageCount: Int
+    let copiedCoverCount: Int
+    let missingCoverCount: Int
 }
 
 enum ShortVideoExportPackageError: LocalizedError, Sendable {
@@ -43,15 +45,40 @@ enum ShortVideoExportPackage {
             directoryHint: .isDirectory
         )
         let imageDirectory = stagingDirectory.appending(path: "图片", directoryHint: .isDirectory)
+        let coverDirectory = stagingDirectory.appending(path: "封面", directoryHint: .isDirectory)
         let manuscriptURL = stagingDirectory.appending(path: "改写文稿.md")
         let storyboardURL = stagingDirectory.appending(path: "分镜与配图提示词.md")
         let subtitleTextURL = stagingDirectory.appending(path: "口播字幕.txt")
 
         do {
             try fileManager.createDirectory(at: imageDirectory, withIntermediateDirectories: true)
+            try fileManager.createDirectory(at: coverDirectory, withIntermediateDirectories: true)
             let shots = VisualShotPlanner.shots(for: output)
+            let covers = CoverArtworkPlanner.artworks(for: output)
             let width = max(2, String(shots.count).count)
             var exportedImages: [Int: String] = [:]
+            var exportedCovers: [CoverFormat: String] = [:]
+
+            for cover in covers {
+                guard let path = cover.generatedImagePath else { continue }
+                let sourceURL = URL(fileURLWithPath: path)
+                let values = try? sourceURL.resourceValues(forKeys: [
+                    .isRegularFileKey, .isSymbolicLinkKey
+                ])
+                guard values?.isRegularFile == true,
+                      values?.isSymbolicLink != true else { continue }
+                let filename = switch cover.format {
+                case .douyinPortrait: "抖音竖版封面-3x4.png"
+                case .douyinLandscape: "抖音横版封面-16x9.png"
+                }
+                let destinationURL = coverDirectory.appending(path: filename)
+                do {
+                    try fileManager.copyItem(at: sourceURL, to: destinationURL)
+                    exportedCovers[cover.format] = "封面/\(filename)"
+                } catch {
+                    continue
+                }
+            }
 
             for (offset, shot) in shots.enumerated() {
                 guard let path = shot.generatedImagePath else { continue }
@@ -80,7 +107,9 @@ enum ShortVideoExportPackage {
             try storyboardMarkdown(
                 output: output,
                 shots: shots,
-                exportedImages: exportedImages
+                exportedImages: exportedImages,
+                covers: covers,
+                exportedCovers: exportedCovers
             ).write(to: storyboardURL, atomically: true, encoding: .utf8)
             if output.style == .spoken {
                 try output.subtitleReadyBody
@@ -96,7 +125,9 @@ enum ShortVideoExportPackage {
                     ? finalDirectory.appending(path: subtitleTextURL.lastPathComponent)
                     : nil,
                 copiedImageCount: exportedImages.count,
-                missingImageCount: max(0, shots.count - exportedImages.count)
+                missingImageCount: max(0, shots.count - exportedImages.count),
+                copiedCoverCount: exportedCovers.count,
+                missingCoverCount: max(0, covers.count - exportedCovers.count)
             )
         } catch {
             if fileManager.fileExists(atPath: stagingDirectory.path) {
@@ -141,9 +172,12 @@ enum ShortVideoExportPackage {
     static func storyboardMarkdown(
         output: RewriteOutput,
         shots: [VisualShot]? = nil,
-        exportedImages: [Int: String] = [:]
+        exportedImages: [Int: String] = [:],
+        covers: [CoverArtwork]? = nil,
+        exportedCovers: [CoverFormat: String] = [:]
     ) -> String {
         let resolvedShots = shots ?? VisualShotPlanner.shots(for: output)
+        let resolvedCovers = covers ?? CoverArtworkPlanner.artworks(for: output)
         let width = max(2, String(resolvedShots.count).count)
         let copied = exportedImages.count
         let sections = resolvedShots.enumerated().map { offset, shot in
@@ -168,15 +202,45 @@ enum ShortVideoExportPackage {
             \(blockquote(shot.prompt))
             """
         }.joined(separator: "\n\n---\n\n")
+        let coverSections = resolvedCovers.map { cover in
+            let imageStatus: String
+            if let relativePath = exportedCovers[cover.format] {
+                imageStatus = "已输出：[\(relativePath)](\(relativePath))"
+            } else {
+                imageStatus = "未生成或原封面已不可用；请按下方提示词补充。"
+            }
+            return """
+            ## \(cover.format.title)｜\(cover.format.aspectRatioLabel)
+
+            - 封面状态：\(imageStatus)
+            - 准确标题：\(flatten(output.title))
+            - 说明：图片模型生成无字背景；澄稿内置生成会在本机排入准确标题。
+
+            ### 完整封面提示词
+
+            \(blockquote(cover.prompt))
+            """
+        }.joined(separator: "\n\n---\n\n")
 
         return """
         # \(flatten(output.title))｜分镜与配图提示词
 
         - 内容类型：\(output.style.rawValue)
         - 画面风格：\(output.effectiveVisualStyle.rawValue)
+        - 封面规格：抖音竖版 3:4 + 横版 16:9
+        - 已输出封面：\(exportedCovers.count)
+        - 尚缺封面：\(max(0, resolvedCovers.count - exportedCovers.count))
         - 分镜总数：\(resolvedShots.count)
         - 已输出图片：\(copied)
         - 尚缺图片：\(max(0, resolvedShots.count - copied))
+
+        # 封面
+
+        \(coverSections)
+
+        ---
+
+        # 分镜
 
         \(sections)
         """

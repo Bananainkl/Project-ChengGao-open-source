@@ -85,10 +85,17 @@ final class PlatformWebSession {
       };
       const record = (url, body) => {
         if (!relevant(url) || typeof body !== 'string' || body.length < 2 || body.length > 8000000) return;
-        const trimmed = body.trim();
-        if (trimmed[0] !== '{' && trimmed[0] !== '[') return;
+        const trimmed = body.trim().replace(/^\uFEFF/, '');
+        const objectStart = trimmed.indexOf('{');
+        const arrayStart = trimmed.indexOf('[');
+        const start = objectStart < 0 ? arrayStart : (arrayStart < 0 ? objectStart : Math.min(objectStart, arrayStart));
+        const objectEnd = trimmed.lastIndexOf('}');
+        const arrayEnd = trimmed.lastIndexOf(']');
+        const end = Math.max(objectEnd, arrayEnd);
+        if (start < 0 || end <= start) return;
+        const jsonBody = trimmed.slice(start, end + 1);
         const values = window[key] || (window[key] = []);
-        values.push({ url: String(url || ''), body, at: Date.now(), priority: priority(url) });
+        values.push({ url: String(url || ''), body: jsonBody, at: Date.now(), priority: priority(url) });
         let total = values.reduce((sum, value) => sum + String(value.body || '').length, 0);
         while (values.length > 20 || total > 16000000) {
           const lowestPriority = values.reduce(

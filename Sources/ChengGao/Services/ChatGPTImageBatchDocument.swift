@@ -3,11 +3,39 @@ import Foundation
 enum ChatGPTImageBatchDocument {
     static let batchSize = 10
 
+    private struct ImageTask {
+        let label: String
+        let context: String
+        let prompt: String
+        let ratio: String
+        let suggestedFilename: String
+    }
+
     static func render(output: RewriteOutput) -> String {
         let shots = VisualShotPlanner.shots(for: output)
-        let count = shots.count
+        let covers = CoverArtworkPlanner.artworks(for: output)
+        let shotRatio = aspectRatio(for: output.style)
+        let tasks = covers.map { cover in
+            ImageTask(
+                label: cover.format.title,
+                context: "标题：\(flatten(output.title))；根据完整成稿提炼封面主视觉",
+                prompt: cover.prompt,
+                ratio: cover.format.aspectRatioLabel,
+                suggestedFilename: cover.format == .douyinPortrait
+                    ? "抖音竖版封面-3x4.png"
+                    : "抖音横版封面-16x9.png"
+            )
+        } + shots.map { shot in
+            ImageTask(
+                label: flatten(shot.timecode),
+                context: shot.spokenContext,
+                prompt: shot.prompt,
+                ratio: shotRatio,
+                suggestedFilename: ""
+            )
+        }
+        let count = tasks.count
         let width = max(2, String(count).count)
-        let ratio = aspectRatio(for: output.style)
         let batches = stride(from: 0, to: count, by: batchSize).map { start in
             start..<min(start + batchSize, count)
         }
@@ -24,8 +52,8 @@ enum ChatGPTImageBatchDocument {
             let trigger = batchOffset == 0
                 ? "首次上传本文档时自动执行本批。"
                 : "只有当用户回复“继续第 \(batchNumber) 批”或在上一批后回复“继续”时，才执行本批。"
-            let tasks = range.map { offset in
-                taskSection(shot: shots[offset], offset: offset, width: width, ratio: ratio)
+            let taskSections = range.map { offset in
+                taskSection(task: tasks[offset], offset: offset, width: width)
             }.joined(separator: "\n\n---\n\n")
             let checklist = range.map { offset in
                 "- [ ] 图片 \(number(offset + 1, width: width))"
@@ -45,7 +73,7 @@ enum ChatGPTImageBatchDocument {
 
             \(checklist)
 
-            \(tasks)
+            \(taskSections)
 
             ### 本批结束指令
 
@@ -64,7 +92,7 @@ enum ChatGPTImageBatchDocument {
         2. 用户回复“继续”时，读取本文档的批次队列，从下一批的第一个编号继续；不得从图片 01 重来。
         3. 每个编号生成一张独立图片，严格对应各自的完整提示词。
         4. 禁止把多个编号合并成拼图、九宫格、分镜表、联系表或一张多面板图片。
-        5. 全部图片统一采用 \(ratio) 和“\(output.effectiveVisualStyle.rawValue)”画面风格；同一人物、空间、配色、材质与整体视觉语言应尽量连续，但不得牺牲单张提示词中的具体要求。
+        5. 每项严格采用该任务单独标明的比例，全部图片统一采用“\(output.effectiveVisualStyle.rawValue)”画面风格；同一人物、空间、配色、材质与整体视觉语言应尽量连续，但不得牺牲单张提示词中的具体要求。
         6. 当前批次内按编号连续生成，不要在每张图片前向用户重复询问或等待确认。
         7. 每完成一张，就标记“已完成图片 XX”；未实际生成的编号不得勾选或声称完成。
         8. 如果当前批次中途受额度、耗时或工具限制中断，明确写出最后完成编号；用户回复“继续”时先补完当前批次，再进入下一批。
@@ -77,7 +105,8 @@ enum ChatGPTImageBatchDocument {
         - 画面风格：\(output.effectiveVisualStyle.rawValue)
         - 风格规范：\(output.effectiveVisualStyle.promptInstruction)
         - 图片总数：\(count)
-        - 统一比例：\(ratio)
+        - 封面：抖音竖版 3:4 + 横版 16:9
+        - 分镜比例：\(shotRatio)
         - 输出方式：每项一张独立图片
 
         ## 批次队列
@@ -109,27 +138,28 @@ enum ChatGPTImageBatchDocument {
     }
 
     private static func taskSection(
-        shot: VisualShot,
+        task: ImageTask,
         offset: Int,
-        width: Int,
-        ratio: String
+        width: Int
     ) -> String {
         let imageNumber = number(offset + 1, width: width)
-        let filename = suggestedFilename(number: imageNumber, timecode: shot.timecode)
+        let filename = task.suggestedFilename.isEmpty
+            ? suggestedFilename(number: imageNumber, timecode: task.label)
+            : task.suggestedFilename
         return """
-        ### 图片 \(imageNumber)｜\(flatten(shot.timecode))
+        ### 图片 \(imageNumber)｜\(task.label)
 
         - 建议文件名：`\(filename)`
-        - 画面比例：\(ratio)
-        - 时间／位置：\(flatten(shot.timecode))
+        - 画面比例：\(task.ratio)
+        - 时间／位置：\(task.label)
 
         #### 对应文案
 
-        \(blockquote(shot.spokenContext))
+        \(blockquote(task.context))
 
         #### 完整生图提示词
 
-        \(blockquote(shot.prompt))
+        \(blockquote(task.prompt))
         """
     }
 
