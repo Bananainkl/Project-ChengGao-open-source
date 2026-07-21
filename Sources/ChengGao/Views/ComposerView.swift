@@ -144,6 +144,18 @@ struct ComposerView: View {
             .glassEffectID("style", in: glassNamespace)
 
             Menu {
+                ForEach(VisualStyle.allCases) { visualStyle in
+                    Button { store.visualStyle = visualStyle } label: {
+                        Label(visualStyle.rawValue, systemImage: visualStyle.systemImage)
+                    }
+                }
+            } label: {
+                Label(store.visualStyle.rawValue, systemImage: store.visualStyle.systemImage)
+            }
+            .glassEffectID("visual-style", in: glassNamespace)
+            .help("画面风格：\(store.visualStyle.summary)")
+
+            Menu {
                 ForEach(OutputLanguage.allCases) { language in
                     Button { store.outputLanguage = language } label: {
                         Label(language.rawValue, systemImage: store.outputLanguage == language ? "checkmark" : "character.bubble")

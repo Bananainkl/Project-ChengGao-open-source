@@ -9,6 +9,9 @@ final class RewriteStore {
     var selectedSection: WorkspaceSection = .compose
     var sourceKind: SourceKind = .text
     var style: RewriteStyle = .spoken
+    var visualStyle: VisualStyle = .automatic {
+        didSet { defaults.set(visualStyle.rawValue, forKey: "visualStyle") }
+    }
     var outputLanguage: OutputLanguage = .simplifiedChinese {
         didSet { defaults.set(outputLanguage.rawValue, forKey: "outputLanguage") }
     }
@@ -123,6 +126,9 @@ final class RewriteStore {
         self.outputLanguage = OutputLanguage(
             rawValue: defaults.string(forKey: "outputLanguage") ?? ""
         ) ?? .simplifiedChinese
+        self.visualStyle = VisualStyle(
+            rawValue: defaults.string(forKey: "visualStyle") ?? ""
+        ) ?? .automatic
         let savedModelMode = ModelMode(
             rawValue: defaults.string(forKey: "modelMode") ?? ""
         ) ?? .onlinePreferred
@@ -204,6 +210,7 @@ final class RewriteStore {
         let input = inputKind == .link ? "" : sourceText
         let inputURL = inputKind == .link ? (validSourceURL ?? sourceURL) : sourceURL
         let requestedStyle = style
+        let requestedVisualStyle = visualStyle
         let requestedLanguage = outputLanguage
         let requestedModelMode = modelMode
         let requestedOnlineCorrection = onlineTerminologyCheck
@@ -255,6 +262,7 @@ final class RewriteStore {
                 )
                 result.sourceVisualReferences = material.visualReferences
                 result.sourceContentKind = material.sourceContentKind
+                result.visualStyle = requestedVisualStyle
                 try Task.checkCancellation()
                 let visualResult = try await visualPromptGenerator.generate(
                     for: result,

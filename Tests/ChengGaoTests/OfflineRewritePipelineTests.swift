@@ -1601,6 +1601,61 @@ struct OfflineRewritePipelineTests {
         #expect(shots.allSatisfy { !$0.spokenContext.isEmpty })
     }
 
+    @Test("画面风格预设使用可执行的材质描述而不是受保护作品名称")
+    func visualStylePresetsAreConcreteAndBrandNeutral() {
+        #expect(VisualStyle.allCases.count == 9)
+        let protectedNames = ["吉卜力", "迪士尼", "猫和老鼠", "Ghibli", "Disney"]
+        for style in VisualStyle.allCases {
+            #expect(!style.summary.isEmpty)
+            #expect(style.promptInstruction.count >= 30)
+            #expect(!protectedNames.contains(where: style.rawValue.contains))
+            #expect(!protectedNames.contains(where: style.promptInstruction.contains))
+        }
+        #expect(VisualStyle.knittedPuppet.promptInstruction.contains("针脚"))
+        #expect(VisualStyle.clayStopMotion.promptInstruction.contains("指纹"))
+        #expect(VisualStyle.handDrawnComic.promptInstruction.contains("纸张"))
+    }
+
+    @Test("选择的画面风格会进入每一个基础分镜提示词")
+    func selectedVisualStyleEntersPlannedShots() {
+        let output = RewriteOutput(
+            title: "毛线短片", rawTranscript: "原稿", originalTranscript: "原稿",
+            corrections: [], suggestions: [], revisedBody: "编辑在桌前整理资料，然后向观众解释结论。",
+            notes: "", transcriptOrigin: .pastedText, style: .spoken,
+            visualStyle: .knittedPuppet, durationSeconds: 10
+        )
+        let shots = VisualShotPlanner.plannedShots(for: output)
+        #expect(!shots.isEmpty)
+        #expect(shots.allSatisfy { $0.prompt.contains("针织毛线") })
+        #expect(shots.allSatisfy { $0.prompt.contains("9:16 竖版") })
+    }
+
+    @Test("在线视觉导演提示和解析结果都会锁定粘土定格风格")
+    func visualPromptDesignerLocksSelectedStyle() {
+        let planned = [
+            VisualShot(id: 0, timecode: "00:00–00:04", spokenContext: "编辑整理资料", prompt: "基础镜头")
+        ]
+        let instruction = VisualPromptDesigner.prompt(
+            for: planned,
+            style: .spoken,
+            language: .simplifiedChinese,
+            visualStyle: .clayStopMotion
+        )
+        #expect(instruction.contains("全局画面风格“粘土定格动画”"))
+        #expect(instruction.contains("可见指纹"))
+
+        let raw = #"{"shots":[{"id":0,"prompt":"9:16竖版，一名编辑坐在木桌前整理成叠资料，前景摆放铅笔和便签，中景侧拍，三分法构图，窗外暖光照亮人物双手，棕色与米白色调，背景书架形成空间纵深，不要文字、字幕、水印或界面元素。"}]}"#
+        let result = VisualPromptDesigner.applying(
+            rawResponse: raw,
+            to: planned,
+            language: .simplifiedChinese,
+            visualStyle: .clayStopMotion
+        )
+        #expect(result.designedCount == 1)
+        #expect(result.shots[0].prompt.contains("统一画面风格"))
+        #expect(result.shots[0].prompt.contains("手捏粘土木偶"))
+    }
+
     @Test("Exports every visual prompt as an executable ChatGPT Markdown task list")
     func chatGPTImageBatchMarkdown() {
         let shots = [
@@ -1621,7 +1676,8 @@ struct OfflineRewritePipelineTests {
         let output = RewriteOutput(
             title: "测试图文", rawTranscript: "原稿", originalTranscript: "原稿",
             corrections: [], suggestions: [], revisedBody: "成稿", notes: "",
-            transcriptOrigin: .socialImageText, style: .social, visualShots: shots
+            transcriptOrigin: .socialImageText, style: .social,
+            visualStyle: .handDrawnComic, visualShots: shots
         )
 
         let markdown = ChatGPTImageBatchDocument.render(output: output)
@@ -1631,6 +1687,8 @@ struct OfflineRewritePipelineTests {
         #expect(markdown.contains("禁止把多个编号合并成拼图"))
         #expect(markdown.contains("首次读取本文档时只执行第 1 批"))
         #expect(markdown.contains("- 统一比例：3:4 竖版"))
+        #expect(markdown.contains("- 画面风格：手绘漫画"))
+        #expect(markdown.contains("纸张纤维"))
         #expect(markdown.contains("- [ ] 图片 01"))
         #expect(markdown.contains("- [ ] 图片 02"))
         #expect(markdown.contains("## 第 1 批｜图片 01–02"))
@@ -1744,6 +1802,7 @@ struct OfflineRewritePipelineTests {
         let output = try JSONDecoder().decode(RewriteOutput.self, from: Data(json.utf8))
         #expect(output.visualShots == nil)
         #expect(output.visualDesignSource == nil)
+        #expect(output.effectiveVisualStyle == .automatic)
     }
 
     @Test("处理结果工作区位于新建文稿和爆款研究之间")
@@ -1785,8 +1844,10 @@ struct OfflineRewritePipelineTests {
         )
         first.selectModelMode(.enhanced)
         first.onlineTerminologyCheck = true
+        first.visualStyle = .clayStopMotion
         #expect(defaults.string(forKey: "modelMode") == ModelMode.onlinePreferred.rawValue)
         #expect(defaults.bool(forKey: "onlineTerminologyCheck"))
+        #expect(defaults.string(forKey: "visualStyle") == VisualStyle.clayStopMotion.rawValue)
 
         first.sourceText = "需要保存的原稿"
         first.startRewrite()
@@ -1810,7 +1871,9 @@ struct OfflineRewritePipelineTests {
         #expect(second.modelMode == .onlinePreferred)
         #expect(second.contextLimit == 16_384)
         #expect(second.onlineTerminologyCheck)
+        #expect(second.visualStyle == .clayStopMotion)
         #expect(second.history.first?.title == "可识别的历史标题")
+        #expect(second.history.first?.output.effectiveVisualStyle == .clayStopMotion)
     }
 
     @Test("编辑后的成稿标题和正文会写回历史")

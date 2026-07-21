@@ -34,6 +34,7 @@ actor AdaptiveVisualPromptGenerator: VisualPromptGenerating {
         return try await designOnline(
             planned: planned,
             style: output.style,
+            visualStyle: output.effectiveVisualStyle,
             language: language,
             progress: progress
         )
@@ -42,6 +43,7 @@ actor AdaptiveVisualPromptGenerator: VisualPromptGenerating {
     private func designOnline(
         planned: [VisualShot],
         style: RewriteStyle,
+        visualStyle: VisualStyle,
         language: OutputLanguage,
         progress: @escaping @Sendable (RewriteProgress) -> Void
     ) async throws -> VisualPromptGenerationResult {
@@ -56,12 +58,18 @@ actor AdaptiveVisualPromptGenerator: VisualPromptGenerating {
                 message: "在线 AI 正在设计第 \(index + 1)/\(batches.count) 组镜头场景…"
             ))
             let completion = try await onlineClient.complete(
-                prompt: VisualPromptDesigner.prompt(for: batch, style: style, language: language)
+                prompt: VisualPromptDesigner.prompt(
+                    for: batch,
+                    style: style,
+                    language: language,
+                    visualStyle: visualStyle
+                )
             )
             let parsed = VisualPromptDesigner.applying(
                 rawResponse: completion.content,
                 to: batch,
-                language: language
+                language: language,
+                visualStyle: visualStyle
             )
             completedShots.append(contentsOf: parsed.shots)
             designedCount += parsed.designedCount

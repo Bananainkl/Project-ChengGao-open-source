@@ -64,7 +64,7 @@ enum ChatGPTImageBatchDocument {
         2. 用户回复“继续”时，读取本文档的批次队列，从下一批的第一个编号继续；不得从图片 01 重来。
         3. 每个编号生成一张独立图片，严格对应各自的完整提示词。
         4. 禁止把多个编号合并成拼图、九宫格、分镜表、联系表或一张多面板图片。
-        5. 全部图片统一采用 \(ratio)；同一人物、空间、配色与整体视觉语言应尽量连续，但不得牺牲单张提示词中的具体要求。
+        5. 全部图片统一采用 \(ratio) 和“\(output.effectiveVisualStyle.rawValue)”画面风格；同一人物、空间、配色、材质与整体视觉语言应尽量连续，但不得牺牲单张提示词中的具体要求。
         6. 当前批次内按编号连续生成，不要在每张图片前向用户重复询问或等待确认。
         7. 每完成一张，就标记“已完成图片 XX”；未实际生成的编号不得勾选或声称完成。
         8. 如果当前批次中途受额度、耗时或工具限制中断，明确写出最后完成编号；用户回复“继续”时先补完当前批次，再进入下一批。
@@ -74,6 +74,8 @@ enum ChatGPTImageBatchDocument {
 
         - 内容标题：\(flatten(output.title))
         - 内容类型：\(output.style.rawValue)
+        - 画面风格：\(output.effectiveVisualStyle.rawValue)
+        - 风格规范：\(output.effectiveVisualStyle.promptInstruction)
         - 图片总数：\(count)
         - 统一比例：\(ratio)
         - 输出方式：每项一张独立图片

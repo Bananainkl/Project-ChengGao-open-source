@@ -432,9 +432,9 @@ struct OutputView: View {
     private var visualSubtitle: String {
         let source = output.visualDesignSource?.label ?? "旧版基础镜头"
         if output.style == .spoken || output.style == .channel {
-            return "\(source) · 每 3–5 秒一镜 · 共 \(visualShots.count) 镜"
+            return "\(output.effectiveVisualStyle.rawValue) · \(source) · 每 3–5 秒一镜 · 共 \(visualShots.count) 镜"
         }
-        return "\(source) · 共 \(visualShots.count) 张 · 可直接复制给图像 AI"
+        return "\(output.effectiveVisualStyle.rawValue) · \(source) · 共 \(visualShots.count) 张 · 可直接复制给图像 AI"
     }
 
     private var originalPageTitle: String {

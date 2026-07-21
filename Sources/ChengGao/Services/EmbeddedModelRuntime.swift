@@ -476,7 +476,12 @@ actor EmbeddedModelRuntime: RewriteProcessing {
                 message: "AI 正在设计第 \(index + 1)/\(batches.count) 组镜头场景…"
             ))
             let raw = try await run(
-                prompt: VisualPromptDesigner.prompt(for: batch, style: output.style, language: language),
+                prompt: VisualPromptDesigner.prompt(
+                    for: batch,
+                    style: output.style,
+                    language: language,
+                    visualStyle: output.effectiveVisualStyle
+                ),
                 modelURL: selection.url,
                 contextSize: selection.contextSize,
                 maximumOutputTokens: min(
@@ -488,7 +493,8 @@ actor EmbeddedModelRuntime: RewriteProcessing {
             let parsed = VisualPromptDesigner.applying(
                 rawResponse: raw,
                 to: batch,
-                language: language
+                language: language,
+                visualStyle: output.effectiveVisualStyle
             )
             completedShots.append(contentsOf: parsed.shots)
             designedCount += parsed.designedCount

@@ -55,6 +55,76 @@ enum RewriteStyle: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+enum VisualStyle: String, CaseIterable, Identifiable, Codable, Sendable {
+    case automatic = "自动匹配"
+    case cinematicDocumentary = "电影纪实"
+    case warmJapaneseAnimation = "温暖日系手绘动画"
+    case westernFairytaleAnimation = "经典欧美童话动画"
+    case retroAmericanComic = "复古美式印刷漫画"
+    case slapstickChaseAnimation = "夸张追逐喜剧动画"
+    case knittedPuppet = "毛线布偶"
+    case clayStopMotion = "粘土定格动画"
+    case handDrawnComic = "手绘漫画"
+
+    var id: Self { self }
+
+    var systemImage: String {
+        switch self {
+        case .automatic: "wand.and.stars"
+        case .cinematicDocumentary: "camera.aperture"
+        case .warmJapaneseAnimation: "leaf"
+        case .westernFairytaleAnimation: "sparkles"
+        case .retroAmericanComic: "burst"
+        case .slapstickChaseAnimation: "figure.run"
+        case .knittedPuppet: "scissors"
+        case .clayStopMotion: "hand.raised.fingers.spread"
+        case .handDrawnComic: "pencil.and.outline"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .automatic: "按题材自动决定写实、历史还原或编辑插画"
+        case .cinematicDocumentary: "真实材质、自然光与克制的电影摄影"
+        case .warmJapaneseAnimation: "柔和线稿、水彩背景与温暖生活气息"
+        case .westernFairytaleAnimation: "圆润造型、明快色彩与舞台式童话构图"
+        case .retroAmericanComic: "粗黑墨线、网点印刷与有限复古色盘"
+        case .slapstickChaseAnimation: "夸张形变、强动作线与追逐喜剧节奏"
+        case .knittedPuppet: "针织纹理、毛线人物与微缩布艺场景"
+        case .clayStopMotion: "手捏痕迹、粘土木偶与定格动画质感"
+        case .handDrawnComic: "可见笔触、纸张纹理与手工上色"
+        }
+    }
+
+    var promptInstruction: String {
+        switch self {
+        case .automatic:
+            "根据文案题材自动选择最合适的视觉语言；现实题材保持可信，历史题材准确还原年代，抽象内容使用克制的编辑视觉隐喻。"
+        case .cinematicDocumentary:
+            "采用电影纪实风格：真实人物与材质，自然可信的动作，带方向性的环境光，克制电影调色，细腻景深与真实镜头质感，避免卡通化和塑料感。"
+        case .warmJapaneseAnimation:
+            "采用温暖日系手绘动画风格：柔和且略有手工抖动的线稿，透明水彩背景，朴素生活细节，空气感自然光，低饱和绿色、米色与暖橙色，二维赛璐璐人物；不得模仿特定工作室、作品或角色。"
+        case .westernFairytaleAnimation:
+            "采用经典欧美童话动画风格：圆润而富有表情的二维角色，清晰轮廓，丰富但协调的色彩，舞台式空间层次，柔和辉光与童话氛围；不得复刻任何已知电影、角色或品牌造型。"
+        case .retroAmericanComic:
+            "采用复古美式印刷漫画风格：粗黑墨线，明显的半色调网点和套色轻微错位，红黄蓝与奶油色有限色盘，戏剧性透视、速度线和强明暗块；保持单一完整画面，不制作多格漫画版面。"
+        case .slapstickChaseAnimation:
+            "采用夸张追逐喜剧动画风格：20 世纪中期美国影院动画般的手绘质感，鲜明轮廓，挤压与拉伸形变，夸张预备动作和速度线，明亮手绘背景与强节奏构图；不得出现可识别的经典猫鼠角色或其造型。"
+        case .knittedPuppet:
+            "采用毛线布偶微缩风格：人物、动物、建筑和道具都由针织毛线、钩织线圈、羊毛毡与布料制作，清楚可见针脚、纤维绒毛和缝线，手工布偶比例，微距摄影、柔和棚灯与浅景深；不要出现真实皮肤或光滑塑料。"
+        case .clayStopMotion:
+            "采用粘土定格动画风格：手捏粘土木偶、可见指纹与塑形工具痕迹，略带不对称的表情和关节，手工微缩布景，逐格动画姿态，柔和漫射棚灯与实体阴影；避免光滑三维渲染和真人皮肤。"
+        case .handDrawnComic:
+            "采用手绘漫画风格：可见铅笔草线与墨线变化，手工排线、干刷或水彩上色，保留纸张纤维和轻微颜料不均，构图有漫画张力但保持一张完整画面；避免照片写实、光滑三维建模和现成素材感。"
+        }
+    }
+
+    func enforcing(_ prompt: String) -> String {
+        guard self != .automatic else { return prompt }
+        return "\(prompt) 统一画面风格：\(promptInstruction)"
+    }
+}
+
 enum OutputLanguage: String, CaseIterable, Identifiable, Codable, Sendable {
     case simplifiedChinese = "简体中文"
     case traditionalChinese = "繁体中文"
@@ -255,7 +325,12 @@ enum VisualShotPlanner {
                 id: index,
                 timecode: "\(format(seconds: start))–\(format(seconds: end))",
                 spokenContext: context,
-                prompt: videoPrompt(context: context, index: index + 1, style: output.style)
+                prompt: videoPrompt(
+                    context: context,
+                    index: index + 1,
+                    style: output.style,
+                    visualStyle: output.effectiveVisualStyle
+                )
             )
         }
     }
@@ -278,7 +353,11 @@ enum VisualShotPlanner {
                 id: index,
                 timecode: index == 0 ? "图文 1 · 封面" : "图文 \(index + 1)",
                 spokenContext: context,
-                prompt: socialPrompt(context: context, index: index + 1)
+                prompt: socialPrompt(
+                    context: context,
+                    index: index + 1,
+                    visualStyle: output.effectiveVisualStyle
+                )
             )
         }
     }
@@ -298,7 +377,11 @@ enum VisualShotPlanner {
                 id: index,
                 timecode: index == 0 ? "头图" : "第 \(index + 1) 节后",
                 spokenContext: context,
-                prompt: articlePrompt(context: context, index: index + 1)
+                prompt: articlePrompt(
+                    context: context,
+                    index: index + 1,
+                    visualStyle: output.effectiveVisualStyle
+                )
             )
         }
     }
@@ -340,21 +423,27 @@ enum VisualShotPlanner {
         }
     }
 
-    private static func videoPrompt(context: String, index: Int, style: RewriteStyle) -> String {
+    private static func videoPrompt(
+        context: String,
+        index: Int,
+        style: RewriteStyle,
+        visualStyle: VisualStyle
+    ) -> String {
         let historicalTerms = ["朝", "皇帝", "太后", "起义", "民国", "清军", "王朝", "古代", "历史"]
-        let visualStyle = historicalTerms.contains(where: context.contains)
+        let automaticStyle = historicalTerms.contains(where: context.contains)
             ? "电影级历史纪录片重现场景，准确还原对应年代的服装、建筑、器物与社会环境"
             : "真实纪实编辑摄影风格，场景可信，人物动作自然"
         let purpose = style == .channel ? "视频号第 \(index) 镜，镜头稳健、留出理解信息的时间" : "竖屏短视频第 \(index) 镜，画面紧凑、视觉重点鲜明"
-        return "生成一张用于\(purpose)的画面。对应文案：『\(context)』。把核心信息转化为一个明确、可直接观看的视觉场景，主体突出，有前中后景层次，自然且具有方向性的光线，统一电影调色；\(visualStyle)，高细节。画面比例：9:16 竖版。不要出现任何文字、字幕、数字标注、二维码、水印、品牌标志、界面元素或无关人物；不得虚构文案没有提及的事实。"
+        let base = "生成一张用于\(purpose)的画面。对应文案：『\(context)』。把核心信息转化为一个明确、可直接观看的视觉场景，主体突出，有前中后景层次，光线、色调与材质统一；\(visualStyle == .automatic ? automaticStyle : visualStyle.promptInstruction)，高细节。画面比例：9:16 竖版。不要出现任何文字、字幕、数字标注、二维码、水印、品牌标志、界面元素或无关人物；不得虚构文案没有提及的事实。"
+        return base
     }
 
-    private static func socialPrompt(context: String, index: Int) -> String {
-        "生成一张小红书图文第 \(index) 张的全新配图。信息依据：\(context)。将核心信息设计为一个主视觉和 2–4 个可见细节，主体、环境、道具和构图关系必须明确；与相邻图片的景别和视觉隐喻有区分。画面比例：3:4 竖版，细节丰富，留出干净的标题排版空间但不直接生成文字。不复制原图、不捏造名人面孔或不可验证的事实；不要文字、字幕、数字标注、二维码、水印、品牌标志或界面元素。"
+    private static func socialPrompt(context: String, index: Int, visualStyle: VisualStyle) -> String {
+        "生成一张小红书图文第 \(index) 张的全新配图。信息依据：\(context)。将核心信息设计为一个主视觉和 2–4 个可见细节，主体、环境、道具和构图关系必须明确；与相邻图片的景别和视觉隐喻有区分。画面风格：\(visualStyle.promptInstruction) 画面比例：3:4 竖版，细节丰富，留出干净的标题排版空间但不直接生成文字。不复制原图、不捏造名人面孔或不可验证的事实；不要文字、字幕、数字标注、二维码、水印、品牌标志或界面元素。"
     }
 
-    private static func articlePrompt(context: String, index: Int) -> String {
-        "生成一张公众号文章第 \(index) 张编辑配图。文章依据：\(context)。用真实可信的人物、物件、场所或象征性关系表达该节核心信息，写明主体动作、前中后景、拍摄角度、光线和主色调，采用克制的纪实编辑摄影风格。画面比例：16:9 横版。不得虚构没有依据的人物和事实；不要文字、字幕、数字标注、二维码、水印、品牌标志或界面元素。"
+    private static func articlePrompt(context: String, index: Int, visualStyle: VisualStyle) -> String {
+        "生成一张公众号文章第 \(index) 张编辑配图。文章依据：\(context)。用真实可信的人物、物件、场所或象征性关系表达该节核心信息，写明主体动作、前中后景、拍摄角度、光线和主色调。画面风格：\(visualStyle.promptInstruction) 画面比例：16:9 横版。不得虚构没有依据的人物和事实；不要文字、字幕、数字标注、二维码、水印、品牌标志或界面元素。"
     }
 
     private static func format(seconds: Double) -> String {
@@ -392,7 +481,8 @@ enum VisualPromptDesigner {
     static func prompt(
         for shots: [VisualShot],
         style: RewriteStyle,
-        language: OutputLanguage
+        language: OutputLanguage,
+        visualStyle: VisualStyle = .automatic
     ) -> String {
         let payload = shots.map {
             """
@@ -414,14 +504,17 @@ enum VisualPromptDesigner {
         /no_think
         你是内容视觉导演和 AI 视觉提示词设计师。\(visualBrief)请先理解每个画面对应文案和原图证据的具体含义，再设计彼此不同、可以直接交给图像生成模型的中文提示词。
 
+        全局画面风格“\(visualStyle.rawValue)”：\(visualStyle.promptInstruction)
+
         硬性要求：
         1. \(language.promptInstruction)
         2. 每条 prompt 必须明确写出：可见主体、主体动作或状态、具体环境与道具、景别和拍摄角度、构图关系、光线、主色调、视觉风格以及画面比例 \(ratio)。
         3. 抽象概念要转化为可观看的生活、工作、空间或象征场景；不得只说“呈现核心观点”“把口播转换成画面”。
         4. 不要复制口播全文，不要让所有镜头使用同一主体、同一办公室、同一中景或相同开头；相邻镜头必须在主体、空间、景别或视觉隐喻上有清楚变化。
         5. 不虚构口播没有的具体事实。真人外貌无可靠依据时，使用背影、手部、剪影、物件或环境叙事，不捏造名人面孔。
-        6. 每条 90–220 个汉字。结尾统一写明：不要文字、字幕、数字标注、二维码、水印、品牌标志或界面元素。
-        7. 只输出 JSON，不要 Markdown、解释或思考过程：
+        6. 每条都必须落实全局画面风格的材质、造型、光线与色彩，不得改成其他风格，也不得引用或模仿具体工作室、影视作品、品牌或已知角色。
+        7. 每条 90–260 个汉字。结尾统一写明：不要文字、字幕、数字标注、二维码、水印、品牌标志或界面元素。
+        8. 只输出 JSON，不要 Markdown、解释或思考过程：
         {"shots":[{"id":0,"prompt":"具体完整提示词"}]}
 
         待设计镜头：
@@ -432,7 +525,8 @@ enum VisualPromptDesigner {
     static func applying(
         rawResponse: String,
         to plannedShots: [VisualShot],
-        language: OutputLanguage
+        language: OutputLanguage,
+        visualStyle: VisualStyle = .automatic
     ) -> (shots: [VisualShot], designedCount: Int) {
         let cleaned = EmbeddedModelRuntime.assistantPayload(from: rawResponse)
         guard let root = EmbeddedModelRuntime.parseJSONObject(from: cleaned),
@@ -446,7 +540,7 @@ enum VisualPromptDesigner {
             let prompt = language.normalize(rawPrompt)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard isSpecificPrompt(prompt) else { continue }
-            prompts[id] = prompt
+            prompts[id] = visualStyle.enforcing(prompt)
         }
         let result = plannedShots.map { shot in
             guard let prompt = prompts[shot.id] else { return shot }
@@ -531,6 +625,7 @@ struct RewriteOutput: Equatable, Codable, Sendable {
     var notes: String
     var transcriptOrigin: TranscriptOrigin
     var style: RewriteStyle
+    var visualStyle: VisualStyle? = nil
     var durationSeconds: Int? = nil
     var visualShots: [VisualShot]? = nil
     var visualDesignSource: VisualDesignSource? = nil
@@ -538,6 +633,7 @@ struct RewriteOutput: Equatable, Codable, Sendable {
     var sourceContentKind: ResearchContentKind? = nil
 
     var body: String { revisedBody }
+    var effectiveVisualStyle: VisualStyle { visualStyle ?? .automatic }
 }
 
 struct RewriteHistoryItem: Identifiable, Equatable, Codable, Sendable {
