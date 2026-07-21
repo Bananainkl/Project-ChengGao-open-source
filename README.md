@@ -32,7 +32,7 @@
   <img src="docs/images/product-screenshot.png" alt="澄稿原生 macOS 文稿工作台" width="85%">
 </p>
 
-当前版本：`1.20.0 (53)`。公开版本由根目录 `VERSION` 管理，内部构建号由
+当前版本：`1.20.1 (54)`。公开版本由根目录 `VERSION` 管理，内部构建号由
 `BUILD_NUMBER` 管理；每次功能更新必须先递增二者，再重新生成安装包。
 
 一个面向 macOS 26 的内容提取与改写应用。目标是在 Apple Silicon Mac 上完成网页读取、

@@ -1071,6 +1071,55 @@ struct OfflineRewritePipelineTests {
         ).contains("日期、数字、信源或关键名词保留不足"))
     }
 
+    @Test("Fact anchors tolerate typography changes without weakening factual coverage")
+    func factualAnchorTypographyNormalization() {
+        let original = "新华社在2026年10月1日报道，项目名为《远方计划》，共有120人参与，完成率为35％。"
+        let revised = "2026 年 10 月 1 号，新华社报道了远方计划：参与者共有 120 人，完成率达到 35%。"
+        #expect(EmbeddedModelRuntime.missingFactualAnchors(
+            original: original,
+            revised: revised,
+            sourceOrigin: .localSpeechRecognition
+        ).isEmpty)
+        #expect(!EmbeddedModelRuntime.documentQualityIssues(
+            original: original,
+            revised: revised,
+            sourceOrigin: .localSpeechRecognition,
+            style: .spoken
+        ).contains("日期、数字、信源或关键名词保留不足"))
+    }
+
+    @Test("Bare single-number speech artifacts do not trigger a false factual rejection")
+    func bareSingleNumberAnchorsAreWeak() {
+        let original = "第一段口播里说1，然后停顿又说2，接着说3，真正事实是共有120人完成调查。"
+        let revised = "这段口播真正要说明的事实，是共有120人完成了调查。"
+        #expect(EmbeddedModelRuntime.missingFactualAnchors(
+            original: original,
+            revised: revised,
+            sourceOrigin: .localSpeechRecognition
+        ).isEmpty)
+    }
+
+    @Test("Online quality retry names the exact missing factual anchors")
+    func onlineRetryNamesMissingFactualAnchors() {
+        let material = SourceMaterial(
+            title: "调查",
+            transcript: "2026年10月1日，新华社称共有120人参与，完成率达到35%。",
+            origin: .localSpeechRecognition,
+            durationSeconds: 18
+        )
+        let prompt = OpenRouterRewritePipeline.retryPrompt(
+            material: material,
+            style: .spoken,
+            language: .simplifiedChinese,
+            firstDraft: "新华社介绍了这项调查，但没有公布人数和完成率。",
+            issues: ["日期、数字、信源或关键名词保留不足"]
+        )
+        #expect(prompt.contains("尚未得到可核对保留的事实锚点"))
+        #expect(prompt.contains("2026年"))
+        #expect(prompt.contains("120人"))
+        #expect(prompt.contains("35%"))
+    }
+
     @Test("Custom compatible provider rejects incomplete pasted credentials")
     func onlineCredentialFormatValidation() {
         #expect(OnlineAIProvider.custom.acceptsAPIKey("example-compatible-key"))

@@ -922,17 +922,13 @@ actor EmbeddedModelRuntime: RewriteProcessing {
             anchorSource = original
         }
         var anchors = factualAnchors(in: anchorSource)
-        if sourceOrigin == .socialImageText {
-            anchors.removeAll { anchor in
-                anchor.count == 1 && anchor.first?.isNumber == true
-            }
-        }
+        anchors.removeAll(where: isWeakBareNumberAnchor)
         let comparableAnchors = crossLanguage
             ? anchors.filter { $0.first?.isNumber == true }
             : anchors
         let minimumAnchorCount = crossLanguage ? 2 : 4
         if comparableAnchors.count >= minimumAnchorCount {
-            let retained = comparableAnchors.filter { revised.localizedCaseInsensitiveContains($0) }
+            let retained = comparableAnchors.filter { factualAnchor($0, isRetainedIn: revised) }
             let requiredRatio = crossLanguage ? 1.0 : (sourceOrigin == .socialImageText ? 0.30 : 0.60)
             if Double(retained.count) / Double(comparableAnchors.count) < requiredRatio {
                 issues.append("日期、数字、信源或关键名词保留不足")
@@ -1051,6 +1047,53 @@ actor EmbeddedModelRuntime: RewriteProcessing {
             }
         }
         return values
+    }
+
+    nonisolated static func missingFactualAnchors(
+        original: String,
+        revised: String,
+        sourceOrigin: TranscriptOrigin
+    ) -> [String] {
+        let crossLanguage = isCrossLanguageRewrite(original: original, revised: revised)
+        let anchorSource: String
+        if sourceOrigin == .socialImageText {
+            anchorSource = original
+                .replacingOccurrences(of: #"原图\s*\d+："#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"https?://\S+|[A-Za-z0-9_-]{16,}"#, with: "", options: .regularExpression)
+        } else {
+            anchorSource = original
+        }
+        var anchors = factualAnchors(in: anchorSource)
+        anchors.removeAll(where: isWeakBareNumberAnchor)
+        if crossLanguage {
+            anchors = anchors.filter { $0.first?.isNumber == true }
+        }
+        return anchors.filter { !factualAnchor($0, isRetainedIn: revised) }
+    }
+
+    nonisolated private static func isWeakBareNumberAnchor(_ anchor: String) -> Bool {
+        anchor.count == 1 && anchor.first?.isNumber == true
+    }
+
+    nonisolated private static func factualAnchor(_ anchor: String, isRetainedIn revised: String) -> Bool {
+        let normalizedDraft = normalizedFactualAnchorText(revised)
+        let normalizedAnchor = normalizedFactualAnchorText(anchor)
+        guard !normalizedAnchor.isEmpty else { return true }
+        if normalizedDraft.contains(normalizedAnchor) { return true }
+        if normalizedAnchor.hasSuffix("日") {
+            return normalizedDraft.contains(String(normalizedAnchor.dropLast()) + "号")
+        }
+        if normalizedAnchor.hasSuffix("号") {
+            return normalizedDraft.contains(String(normalizedAnchor.dropLast()) + "日")
+        }
+        return false
+    }
+
+    nonisolated private static func normalizedFactualAnchorText(_ text: String) -> String {
+        text
+            .folding(options: [.caseInsensitive, .widthInsensitive], locale: Locale(identifier: "zh_CN"))
+            .replacingOccurrences(of: #"[\s“”「」『』《》\"'‘’]"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "％", with: "%")
     }
 
     nonisolated private static func bigramCoverage(source: String, target: String) -> Double {

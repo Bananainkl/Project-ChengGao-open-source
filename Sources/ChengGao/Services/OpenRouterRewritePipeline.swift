@@ -353,9 +353,20 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
         firstDraft: String,
         issues: [String]
     ) -> String {
+        let missingAnchors = EmbeddedModelRuntime.missingFactualAnchors(
+            original: material.transcript,
+            revised: firstDraft,
+            sourceOrigin: material.origin
+        )
+        let anchorInstruction = missingAnchors.isEmpty ? "" : """
+
+        上一版中尚未得到可核对保留的事实锚点：\(missingAnchors.prefix(24).joined(separator: "、"))。
+        请逐项核对原稿语境，把这些日期、数字、专有名词或被引用名称准确写回 revised；可以重写句子，但不得删掉事实或改变含义。
         """
+        return """
         上一版“\(style.rawValue)”未通过编辑质量检查：\(issues.joined(separator: "；"))。
         请重新通读原稿和上一版，完成一次真正的全文结构重写。必须保留事实，但要更换开头、信息顺序、段落结构和句式，消除逐句复述与拼接感。
+        \(anchorInstruction)
         \(language.promptInstruction)
         仍必须严格按照以下目标成稿规格，不得回到原素材的表达形式：
         \(targetContract(for: style))
