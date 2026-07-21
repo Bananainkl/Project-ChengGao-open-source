@@ -24,6 +24,17 @@ final class RewriteStore {
     var onlineReasoningEffort: OnlineAIReasoningEffort = .automatic {
         didSet { onlineReasoningEffort.save(defaults: defaults) }
     }
+    var webAIProvider: WebAIProvider = .qwen {
+        didSet {
+            defaults.set(webAIProvider.rawValue, forKey: WebAIConfiguration.providerKey)
+            webAIStatus = "请登录并检测 \(webAIProvider.title)"
+        }
+    }
+    var webAIEnabled = false {
+        didSet { defaults.set(webAIEnabled, forKey: WebAIConfiguration.enabledKey) }
+    }
+    var webAILoginProvider: WebAIProvider?
+    private(set) var webAIStatus = "尚未登录"
     let contextLimit = 16_384
     var onlineProvider: OnlineAIProvider = .custom {
         didSet {
@@ -69,11 +80,15 @@ final class RewriteStore {
     }
 
     var runtimeModeLabel: String {
-        "\(onlineProvider.displayName) · 在线全文处理"
+        webAIEnabled
+            ? "\(webAIProvider.title) 网页 · Markdown 全文处理"
+            : "\(onlineProvider.displayName) · 在线全文处理"
     }
 
     var privacySummary: String {
-        "通过 \(onlineProvider.displayName) 在线改写会发送完整标题与正文"
+        webAIEnabled
+            ? "通过 \(webAIProvider.title) 网页会话改写会发送完整标题与正文"
+            : "通过 \(onlineProvider.displayName) 在线改写会发送完整标题与正文"
     }
 
     var selectedHistoryItem: RewriteHistoryItem? {
@@ -144,6 +159,9 @@ final class RewriteStore {
         self.modelMode = Self.normalizedLocalMode(savedModelMode)
         self.onlineTerminologyCheck = defaults.bool(forKey: "onlineTerminologyCheck")
         self.onlineReasoningEffort = OnlineAIReasoningEffort.load(defaults: defaults)
+        let webConfiguration = WebAIConfiguration.load(defaults: defaults)
+        self.webAIProvider = webConfiguration.provider
+        self.webAIEnabled = webConfiguration.isEnabled
         let loadedOnlineProvider = OnlineAIProvider(
             rawValue: defaults.string(forKey: "onlineAI.provider") ?? ""
         ) ?? .custom
@@ -201,9 +219,11 @@ final class RewriteStore {
         }
         self.modelMode = .onlinePreferred
         defaults.set(ModelMode.onlinePreferred.rawValue, forKey: "modelMode")
-        self.statusMessage = self.hasOnlineAPIKey
-            ? "\(self.onlineProvider.displayName) 在线 AI 就绪"
-            : "请先配置 \(self.onlineProvider.displayName) API Key"
+        self.statusMessage = self.webAIEnabled
+            ? "\(self.webAIProvider.title) 网页 AI 已启用"
+            : (self.hasOnlineAPIKey
+                ? "\(self.onlineProvider.displayName) 在线 AI 就绪"
+                : "请先配置 \(self.onlineProvider.displayName) API Key")
         self.history = Self.loadHistory(from: resolvedHistoryURL, legacyDefaults: defaults)
     }
 
@@ -212,6 +232,39 @@ final class RewriteStore {
         let hasLink = sourceKind == .link && validSourceURL != nil
         let hasRequiredInput = sourceKind == .link ? hasLink : hasText
         return hasRequiredInput && !isProcessing
+    }
+
+    func beginWebAILogin(_ provider: WebAIProvider) {
+        webAIProvider = provider
+        webAILoginProvider = provider
+        webAIStatus = "等待在网页中完成登录…"
+    }
+
+    func finishWebAILogin(_ provider: WebAIProvider, authenticated: Bool, ready: Bool) {
+        webAIProvider = provider
+        webAILoginProvider = nil
+        if authenticated {
+            webAIEnabled = true
+            webAIStatus = "\(provider.title) 已登录并用于改写"
+            statusMessage = "\(provider.title) 网页 AI 就绪"
+        } else {
+            webAIEnabled = false
+            webAIStatus = ready
+                ? "\(provider.title) 网页可用，但尚未检测到账号登录"
+                : "未检测到 \(provider.title) 对话输入框"
+        }
+    }
+
+    func selectWebAIProvider(_ provider: WebAIProvider) {
+        webAIProvider = provider
+        if webAIEnabled {
+            webAIStatus = "已切换到 \(provider.title)；请先确认登录状态"
+        }
+    }
+
+    func disableWebAI() {
+        webAIEnabled = false
+        webAIStatus = "已停用网页 AI，改写将使用 API 配置"
     }
 
     var latestResultOutput: RewriteOutput? {
@@ -366,9 +419,9 @@ final class RewriteStore {
         selectedHistoryID = nil
         processingProgress = nil
         isProcessing = false
-        statusMessage = hasOnlineAPIKey
-            ? "\(onlineProvider.displayName) 在线 AI 就绪"
-            : "请配置在线 AI"
+        statusMessage = webAIEnabled
+            ? "\(webAIProvider.title) 网页 AI 就绪"
+            : (hasOnlineAPIKey ? "\(onlineProvider.displayName) 在线 AI 就绪" : "请配置在线 AI")
         selectedSection = .compose
     }
 

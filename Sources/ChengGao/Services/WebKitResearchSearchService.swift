@@ -29,12 +29,16 @@ enum WebKitResearchSearchError: LocalizedError {
 }
 
 struct WebKitResearchSearchService {
-    static let capturedBodiesScript = """
-    JSON.stringify((window.__chenggaoCapturedSearchResponses || [])
-      .slice()
-      .sort((left, right) => Number(right.priority || 0) - Number(left.priority || 0))
-      .map(value => value.body))
-    """
+    nonisolated static func capturedBodiesScript(platform: ResearchPlatform) -> String {
+        let minimumPriority = platform == .douyin ? 3 : 1
+        return """
+        JSON.stringify((window.__chenggaoCapturedSearchResponses || [])
+          .filter(value => Number(value.priority || 0) >= \(minimumPriority))
+          .slice()
+          .sort((left, right) => Number(right.priority || 0) - Number(left.priority || 0))
+          .map(value => value.body))
+        """
+    }
 
     @MainActor
     static func search(
@@ -98,6 +102,10 @@ struct WebKitResearchSearchService {
             }
         }
         session.navigationDelegate.beginNavigation()
+        _ = try? await javascriptString(
+            "window.__chenggaoCapturedSearchResponses = []; 'cleared'",
+            in: webView
+        )
         let navigationTimeout: TimeInterval = platform == .xiaohongshu ? 45 : 15
         webView.load(URLRequest(url: url, timeoutInterval: navigationTimeout))
 
@@ -134,7 +142,7 @@ struct WebKitResearchSearchService {
             }
             if platform == .douyin || platform == .xiaohongshu {
                 let capturedPayload = (try? await javascriptString(
-                    capturedBodiesScript,
+                    capturedBodiesScript(platform: platform),
                     in: webView
                 )) ?? ""
                 let capturedValues = capturedResponseContents(
@@ -144,7 +152,10 @@ struct WebKitResearchSearchService {
                     maxItems: maxItems,
                     recentDays: recentDays
                 )
-                if !capturedValues.isEmpty { return capturedValues }
+                if !capturedValues.isEmpty,
+                   platform != .douyin || hasKeywordEvidence(capturedValues, keyword: keyword) {
+                    return capturedValues
+                }
             }
             let payload = try await javascriptString(extractionScript(platform: platform, maxItems: maxItems), in: webView)
             let values = renderedContents(
@@ -154,7 +165,10 @@ struct WebKitResearchSearchService {
                 maxItems: maxItems,
                 recentDays: recentDays
             )
-            if !values.isEmpty { return values }
+            if !values.isEmpty,
+               platform != .douyin || hasKeywordEvidence(values, keyword: keyword) {
+                return values
+            }
             if attempt == 3 || attempt == 9 || (platform == .douyin && attempt == 19) {
                 _ = try? await javascriptString(
                     "window.scrollTo(0, Math.min(document.body ? document.body.scrollHeight : 0, \(attempt == 3 ? 900 : 1800))); 'scrolled'",
@@ -168,6 +182,25 @@ struct WebKitResearchSearchService {
             throw WebKitResearchSearchError.timedOut(platform.title)
         }
         throw WebKitResearchSearchError.noRenderedResults(platform.title)
+    }
+
+    nonisolated static func hasKeywordEvidence(
+        _ values: [ResearchContent],
+        keyword: String
+    ) -> Bool {
+        let normalizedKeyword = keyword
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalizedKeyword.isEmpty else { return false }
+        let terms = normalizedKeyword
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+            .filter { $0.count >= 2 }
+        let requiredTerms = terms.isEmpty ? [normalizedKeyword] : terms
+        return values.contains { value in
+            let evidence = "\(value.title)\n\(value.description ?? "")".lowercased()
+            return requiredTerms.contains(where: evidence.contains)
+        }
     }
 
     @MainActor

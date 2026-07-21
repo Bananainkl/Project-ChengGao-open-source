@@ -375,6 +375,167 @@ struct OfflineRewritePipelineTests {
         #expect(system.contains("以本条为准"))
     }
 
+    @Test("网页 AI 配置只提供千问和 DeepSeek 并可持久化")
+    func webAIConfigurationPersistence() throws {
+        let suite = "WebAIConfiguration-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        #expect(WebAIProvider.allCases == [.qwen, .deepSeek])
+        #expect(WebAIProvider.qwen.chatURL.host == "www.qianwen.com")
+        #expect(WebAIProvider.deepSeek.chatURL.host == "chat.deepseek.com")
+
+        WebAIConfiguration(provider: .deepSeek, isEnabled: true).save(defaults: defaults)
+        #expect(WebAIConfiguration.load(defaults: defaults) == WebAIConfiguration(
+            provider: .deepSeek,
+            isEnabled: true
+        ))
+    }
+
+    @Test("网页 AI Markdown 任务包含完整改写硬规则和原稿")
+    func webAIMarkdownRewriteContract() {
+        let material = SourceMaterial(
+            title: "测试原稿",
+            transcript: "这是需要保留的完整内容、观点和论证。",
+            origin: .pastedText
+        )
+        let task = WebAIRewritePipeline.markdownRewriteTask(
+            material: material,
+            style: .article,
+            language: .simplifiedChinese
+        )
+        #expect(task.contains("## 任务类型"))
+        #expect(task.contains("只做改写，不做缩写或摘要"))
+        #expect(task.contains("结构层次、内容、观点、论证关系和重要细节全部完整"))
+        #expect(task.contains("这是需要保留的完整内容、观点和论证。"))
+        #expect(task.contains("chenggao-result"))
+    }
+
+    @Test("网页 AI 返回的 Markdown 文档可解析为澄稿结果")
+    func webAIMarkdownResponseParsing() throws {
+        let material = SourceMaterial(title: "原标题", transcript: "原稿正文", origin: .pastedText)
+        let response = """
+        CHENGGAO_RESULT_BEGIN_TEST
+        ```chenggao-result
+        {"revised":"完整改写后的正文","title":"新标题","corrections":[],"suggestions":[]}
+        ```
+        CHENGGAO_RESULT_END_TEST
+        """
+        let draft = try OpenRouterRewritePipeline.parseDraft(
+            response,
+            material: material,
+            style: .article,
+            language: .simplifiedChinese
+        )
+        #expect(draft.title == "新标题")
+        #expect(draft.revised == "完整改写后的正文")
+    }
+
+    @Test("网页 AI 提交脚本保留 Markdown 换行并只匹配指定平台")
+    func webAIScriptsAreProviderSpecific() {
+        let prompt = "# 标题\n\n带引号 “测试” 和 \\ 的正文"
+        let qwen = WebAIWebSession.submissionScript(prompt: prompt, provider: .qwen)
+        let deepSeek = WebAIWebSession.submissionScript(prompt: prompt, provider: .deepSeek)
+        #expect(qwen.contains(#"[data-slate-editor=\"true\"]"#))
+        #expect(qwen.contains("发送消息"))
+        #expect(deepSeek.contains("textarea"))
+        #expect(deepSeek.contains(#"[contenteditable=\"true\"]"#))
+        #expect(qwen.contains(#"# 标题\n\n带引号"#))
+
+        let response = WebAIWebSession.responseScript(
+            selector: WebAIProvider.qwen.responseSelector,
+            begin: "BEGIN",
+            end: "END"
+        )
+        #expect(response.contains(".qk-markdown-complete"))
+        #expect(!response.contains(".ds-markdown"))
+        #expect(WebAIWebSession.focusEditorScript(provider: .qwen).contains("data-slate-editor"))
+        #expect(WebAIWebSession.clickSendScript(provider: .qwen).contains("发送消息"))
+    }
+
+    @Test("网页 AI 提交与回读脚本可在 WebKit 真实执行")
+    @MainActor
+    func webAIScriptsExecuteInWebKit() async throws {
+        let webView = WKWebView(frame: .zero)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = webView
+        defer { window.contentView = nil }
+        webView.loadHTMLString("""
+        <html><body>
+          <div role="textbox" contenteditable="true"></div>
+          <button aria-label="发送消息" onclick="window.sent = true">发送</button>
+          <div class="qk-markdown-complete">BEGIN\n完整结果\nEND</div>
+        </body></html>
+        """, baseURL: nil)
+        try await Task.sleep(for: .milliseconds(250))
+        let focused = try await webView.callAsyncJavaScript(
+            "return \(WebAIWebSession.focusEditorScript(provider: .qwen))",
+            arguments: [:],
+            in: nil,
+            contentWorld: .page
+        ) as? Bool
+        #expect(focused == true)
+        window.makeFirstResponder(webView)
+        webView.insertText("# Markdown\n完整原稿")
+        try await Task.sleep(for: .milliseconds(100))
+        let submitted = try await webView.callAsyncJavaScript(
+            "return \(WebAIWebSession.clickSendScript(provider: .qwen))",
+            arguments: [:],
+            in: nil,
+            contentWorld: .page
+        ) as? Bool
+        #expect(submitted == true)
+        let sent = try await webView.callAsyncJavaScript(
+            "return window.sent === true",
+            arguments: [:],
+            in: nil,
+            contentWorld: .page
+        ) as? Bool
+        #expect(sent == true)
+        let response = try await webView.callAsyncJavaScript(
+            "return \(WebAIWebSession.responseScript(selector: ".qk-markdown-complete", begin: "BEGIN", end: "END"))",
+            arguments: [:],
+            in: nil,
+            contentWorld: .page
+        ) as? String
+        #expect(response?.contains("完整结果") == true)
+    }
+
+    @Test("千问真实网页可接收 Markdown 任务并返回协议结果")
+    @MainActor
+    func liveQwenWebMarkdownRoundTrip() async throws {
+        guard ProcessInfo.processInfo.environment["CHENGGAO_QWEN_WEB_LIVE_TEST"] == "1" else { return }
+        let session = WebAIWebSessionPool.shared.session(for: .qwen)
+        session.ensureBackgroundRendering()
+        session.loadChatHome()
+        try await Task.sleep(for: .seconds(3))
+        guard await session.isAuthenticated() else {
+            session.releaseBackgroundRendering()
+            return
+        }
+        session.releaseBackgroundRendering()
+        let response: String
+        do {
+            response = try await session.complete(
+                markdownTask: """
+                ## 任务
+                请在 `chenggao-result` 代码块中返回这个 JSON：
+                {"revised":"千问网页 Markdown 回归成功","title":"回归测试","corrections":[],"suggestions":[]}
+                """,
+                timeout: .seconds(30)
+            )
+        } catch {
+            Issue.record("千问页面诊断：\(await session.diagnosticSummary())")
+            throw error
+        }
+        #expect(response.contains("千问网页 Markdown 回归成功"))
+        #expect(response.contains(#""revised""#))
+    }
+
     @Test("Reasoning depth is persisted and added only when explicitly selected")
     func reasoningEffortRequestShape() {
         let suite = "ReasoningEffort-\(UUID().uuidString)"
@@ -2211,9 +2372,9 @@ struct OfflineRewritePipelineTests {
         #expect(output.effectiveVisualStyle == .automatic)
     }
 
-    @Test("处理结果工作区位于新建文稿和爆款研究之间")
+    @Test("在线 AI 登录位于爆款研究下方")
     func workspaceResultOrder() {
-        #expect(WorkspaceSection.allCases == [.compose, .results, .research, .accounts, .history])
+        #expect(WorkspaceSection.allCases == [.compose, .results, .research, .onlineAI, .accounts, .history])
     }
 
     @Test("Generates a useful title for pasted material")
@@ -2752,7 +2913,7 @@ struct OfflineRewritePipelineTests {
         #expect(PlatformWebSession.mediaSilencingScript.contains("element.muted = true"))
         #expect(PlatformWebSession.mediaSilencingScript.contains("MutationObserver"))
         #expect(PlatformWebSession.searchResponseCaptureScript.contains("priority: priority(url)"))
-        #expect(WebKitResearchSearchService.capturedBodiesScript.contains("right.priority"))
+        #expect(WebKitResearchSearchService.capturedBodiesScript(platform: .douyin).contains("right.priority"))
     }
 
     @Test("Douyin capture reads video records nested inside encoded JSON strings")
@@ -2782,6 +2943,41 @@ struct OfflineRewritePipelineTests {
         #expect(value.title == "客户机页面里的职场内耗结果")
         #expect(value.likeCount == 4_567)
         #expect(value.coverURL?.absoluteString == "https://p3.douyinpic.com/client.jpeg")
+    }
+
+    @Test("Douyin search ignores feed captures and requires current keyword evidence")
+    func douyinSearchRejectsStaleFeedResults() {
+        let captureScript = WebKitResearchSearchService.capturedBodiesScript(platform: .douyin)
+        #expect(captureScript.contains("priority || 0) >= 3"))
+
+        let stale = ResearchContent(
+            id: "douyin:stale",
+            platform: .douyin,
+            platformContentID: "7000000000000000001",
+            keyword: "马克思",
+            title: "抖音新春直播季 2024 年总台春晚",
+            description: "春节推荐内容",
+            authorName: nil,
+            authorURL: nil,
+            contentURL: URL(string: "https://www.douyin.com/video/7000000000000000001")!,
+            coverURL: nil,
+            publishedAt: nil,
+            durationSeconds: nil,
+            viewCount: nil,
+            likeCount: nil,
+            commentCount: nil,
+            collectCount: nil,
+            shareCount: nil,
+            hotScore: 0,
+            collectedAt: .now
+        )
+        var relevant = stale
+        relevant.id = "douyin:relevant"
+        relevant.platformContentID = "7000000000000000002"
+        relevant.title = "马克思为何重新进入年轻人的视野"
+
+        #expect(!WebKitResearchSearchService.hasKeywordEvidence([stale], keyword: "马克思"))
+        #expect(WebKitResearchSearchService.hasKeywordEvidence([stale, relevant], keyword: "马克思"))
     }
 
     @Test("Douyin rendered fallback remains valid JavaScript")
@@ -3085,6 +3281,21 @@ struct OfflineRewritePipelineTests {
         )
         #expect(!values.isEmpty)
         #expect(values.allSatisfy { $0.platform == .xiaohongshu })
+    }
+
+    @MainActor
+    @Test("Live Douyin consecutive searches must follow each current keyword")
+    func liveDouyinConsecutiveSearchesFollowKeywords() async throws {
+        guard ProcessInfo.processInfo.environment["CHENGGAO_DOUYIN_LIVE_TEST"] == "1" else { return }
+        let first = try await WebKitResearchSearchService.search(
+            platform: .douyin, keyword: "马克思", maxItems: 20, recentDays: 30
+        )
+        let second = try await WebKitResearchSearchService.search(
+            platform: .douyin, keyword: "人工智能", maxItems: 20, recentDays: 30
+        )
+        #expect(WebKitResearchSearchService.hasKeywordEvidence(first, keyword: "马克思"))
+        #expect(WebKitResearchSearchService.hasKeywordEvidence(second, keyword: "人工智能"))
+        #expect(Set(first.map(\.id)) != Set(second.map(\.id)))
     }
 
     @Test("Platform cookies must match both the cookie name and domain")

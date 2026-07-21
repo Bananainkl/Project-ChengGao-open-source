@@ -1730,14 +1730,22 @@ actor EmbeddedModelRuntime: RewriteProcessing {
 
 actor AdaptiveRewritePipeline: RewriteProcessing {
     private let onlineModel: OpenRouterRewritePipeline
+    private let webModel: WebAIRewritePipeline
     private let verifier: any TerminologyVerifying
+    private let webConfigurationProvider: @Sendable () -> WebAIConfiguration
 
     init(
         onlineModel: OpenRouterRewritePipeline = OpenRouterRewritePipeline(),
-        verifier: any TerminologyVerifying = WikipediaTerminologyVerifier()
+        webModel: WebAIRewritePipeline = WebAIRewritePipeline(),
+        verifier: any TerminologyVerifying = WikipediaTerminologyVerifier(),
+        webConfigurationProvider: @escaping @Sendable () -> WebAIConfiguration = {
+            WebAIConfiguration.load()
+        }
     ) {
         self.onlineModel = onlineModel
+        self.webModel = webModel
         self.verifier = verifier
+        self.webConfigurationProvider = webConfigurationProvider
     }
 
     func rewrite(
@@ -1749,7 +1757,9 @@ actor AdaptiveRewritePipeline: RewriteProcessing {
         contextLimit: Int,
         progress: @escaping @Sendable (RewriteProgress) -> Void
     ) async throws -> RewriteOutput {
-        var output = try await onlineModel.rewrite(
+        let webConfiguration = webConfigurationProvider()
+        let selectedPipeline: any RewriteProcessing = webConfiguration.isEnabled ? webModel : onlineModel
+        var output = try await selectedPipeline.rewrite(
             material: material,
             style: style,
             language: language,

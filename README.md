@@ -15,7 +15,7 @@
   <img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-2563eb">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-native-f05138?logo=swift&logoColor=white">
   <img alt="macOS 26" src="https://img.shields.io/badge/macOS-26-111827?logo=apple">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-155_passing-22c55e">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-163_passing-22c55e">
   <img alt="GitHub stars" src="https://img.shields.io/github/stars/Bananainkl/Project-ChengGao-open-source?style=flat">
 </p>
 
@@ -38,6 +38,8 @@ It combines local Whisper transcription, embedded local language models, and opt
 - 一键输出以短视频标题命名的文件包，统一带走口播字幕纯文本、改写文稿、逐镜提示词和已经生成的图片。
 - 配图建议会结合标题、完整成稿和画面风格生成抖音 3:4 竖版与 16:9 横版双封面，并由 App 在本机排入准确标题。
 - 抖音搜索兼容带安全前缀的 JSON、新版作品字段与结果卡片页面结构。
+- 抖音搜索只接受本次关键词的搜索响应和相关结果，不再把首页／推荐流的固定内容冒充搜索结果。
+- “在线 AI 登录”只提供千问和 DeepSeek：用户在内置网页自行登录后，可用 Markdown 全文任务完成改写并读回结果，无需填写聊天 API Key。
 - 改写专用系统指令强制“只做改写，不做缩写或摘要”；结构、内容、观点、论证和重要细节必须完整，字数接近原稿。
 - 中文长稿改写会把原稿有效字数与最低篇幅目标发送给在线模型；过短时按字数差定向补回背景、例子、过程和结论，不会把摘要当成改写。
 - 8GB Mac 使用轻量模型保护模式，配置在线接口后也能使用在线优先与本地回退。
@@ -46,7 +48,7 @@ It combines local Whisper transcription, embedded local language models, and opt
   <img src="docs/images/product-screenshot.png" alt="澄稿原生 macOS 文稿工作台" width="85%">
 </p>
 
-当前版本：`1.21.3 (61)`。公开版本由根目录 `VERSION` 管理，内部构建号由
+当前版本：`1.21.4 (62)`。公开版本由根目录 `VERSION` 管理，内部构建号由
 `BUILD_NUMBER` 管理；每次功能更新必须先递增二者，再重新生成安装包。
 
 一个面向 macOS 26 的内容提取与改写应用。目标是在 Apple Silicon Mac 上完成网页读取、
@@ -60,6 +62,7 @@ It combines local Whisper transcription, embedded local language models, and opt
 - macOS 26 Liquid Glass 编辑器、结果卡片和主操作按钮
 - 普通网页正文的本地提取；公众号链接优先锁定正文容器
 - 爆款研究中心：关键词搜索、时间范围、热度排行、SQLite 去重与 CSV／JSON／Markdown 导出
+- “在线 AI 登录”提供千问和 DeepSeek 内置网页登录；登录后可把完整改写任务以 Markdown 提交并读回结果，无需在澄稿中填写这两家的 API Key
 - 哔哩哔哩使用快速公共搜索；YouTube 可用 Data API 或网页登录搜索，其他平台使用登录后的真实网页尝试搜索
 - 登录窗口与搜索复用同一个长期 WebView，保留 JavaScript 会话与浏览器状态；不保存明文账号、密码、Cookie 或 Token
 - 研究结果可一键进入真实字幕／音轨提取、实质改写和镜头提示词流程

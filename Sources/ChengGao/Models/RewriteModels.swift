@@ -4,6 +4,7 @@ enum WorkspaceSection: String, CaseIterable, Identifiable {
     case compose
     case results
     case research
+    case onlineAI
     case accounts
     case history
 
@@ -14,6 +15,7 @@ enum WorkspaceSection: String, CaseIterable, Identifiable {
         case .compose: "新建文稿"
         case .results: "处理结果"
         case .research: "爆款研究"
+        case .onlineAI: "在线 AI 登录"
         case .accounts: "平台账号"
         case .history: "最近处理"
         }
@@ -24,6 +26,7 @@ enum WorkspaceSection: String, CaseIterable, Identifiable {
         case .compose: "square.and.pencil"
         case .results: "doc.text.magnifyingglass"
         case .research: "chart.line.uptrend.xyaxis"
+        case .onlineAI: "person.crop.circle.badge.checkmark"
         case .accounts: "person.crop.circle.badge.checkmark"
         case .history: "clock"
         }

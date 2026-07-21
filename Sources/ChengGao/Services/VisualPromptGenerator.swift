@@ -12,11 +12,19 @@ protocol VisualPromptGenerating: Sendable {
 
 actor AdaptiveVisualPromptGenerator: VisualPromptGenerating {
     private let onlineClient: OpenRouterAPIClient
+    private let webClient: WebAIChatClient
+    private let webConfigurationProvider: @Sendable () -> WebAIConfiguration
 
     init(
-        onlineClient: OpenRouterAPIClient = OpenRouterAPIClient()
+        onlineClient: OpenRouterAPIClient = OpenRouterAPIClient(),
+        webClient: WebAIChatClient = WebAIChatClient(),
+        webConfigurationProvider: @escaping @Sendable () -> WebAIConfiguration = {
+            WebAIConfiguration.load()
+        }
     ) {
         self.onlineClient = onlineClient
+        self.webClient = webClient
+        self.webConfigurationProvider = webConfigurationProvider
     }
 
     func generate(
@@ -57,14 +65,17 @@ actor AdaptiveVisualPromptGenerator: VisualPromptGenerating {
                 total: batches.count,
                 message: "在线 AI 正在设计第 \(index + 1)/\(batches.count) 组镜头场景…"
             ))
-            let completion = try await onlineClient.complete(
-                prompt: VisualPromptDesigner.prompt(
-                    for: batch,
-                    style: style,
-                    language: language,
-                    visualStyle: visualStyle
-                )
+            let prompt = VisualPromptDesigner.prompt(
+                for: batch,
+                style: style,
+                language: language,
+                visualStyle: visualStyle
             )
+            let completion = if webConfigurationProvider().isEnabled {
+                try await webClient.complete(prompt: prompt)
+            } else {
+                try await onlineClient.complete(prompt: prompt)
+            }
             let parsed = VisualPromptDesigner.applying(
                 rawResponse: completion.content,
                 to: batch,

@@ -22,6 +22,8 @@ struct ContentView: View {
                             ResultView(store: store)
                         case .research:
                             ResearchView(researchStore: researchStore, rewriteStore: store)
+                        case .onlineAI:
+                            WebAILoginView(store: store)
                         case .accounts:
                             ResearchAccountsView(store: researchStore)
                         case .history:
