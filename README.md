@@ -159,7 +159,7 @@ swift test
 ./script/package_dmg.sh
 ```
 
-安装包名称会自动带版本号，例如 `dist/澄稿-1.9.1-macOS-arm64.dmg`，并同时生成
+安装包名称会自动带版本号，例如 `dist/ChengGao-1.9.1-macOS-arm64.dmg`，并同时生成
 SHA-256 校验文件。DMG 根目录会自动附带“请先阅读｜安装与使用说明.txt”，包含未公证
 内测包的 macOS 放行步骤、AI 配置、平台登录、基础工作流和隐私说明；缺少该文件时打包脚本会停止。
 面向其他用户公开分发时，使用 `script/package_release.sh` 完成
@@ -173,6 +173,8 @@ Developer ID 签名与 Apple 公证；本机没有相应证书时只能生成本
 
 该命令会要求 `CHANGELOG.md` 已包含当前版本，随后重新测试构建并生成带版本号的 DMG，
 再以可回滚方式替换 `/Applications/澄稿.app`，验证新版本能够启动后才删除旧版本备份。
+推送 `v<版本号>` 标签后，GitHub Actions 还会在 macOS 26 ARM64 环境重新运行测试、
+生成 DMG，并把安装包及其 `.sha256` 校验文件自动附加到对应的 GitHub Release。
 
 本机实测：
 
