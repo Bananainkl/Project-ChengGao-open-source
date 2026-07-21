@@ -271,7 +271,7 @@ struct OutputView: View {
                             showBatchImageConfirmation = true
                         }
                         .disabled(!canGenerateImages || visualShots.isEmpty)
-                        .help(canGenerateImages ? "逐张调用图片接口；会先要求确认" : "请先在 AI 设置中配置图片生成模型")
+                        .help(canGenerateImages ? "逐张调用图片接口；会先要求确认" : "请先在 AI 设置中配置图片接口、模型和独立 Key")
                     }
                 }
                 .padding(12)
@@ -303,7 +303,7 @@ struct OutputView: View {
                                     }
                                     .controlSize(.small)
                                     .disabled(!canGenerateImages)
-                                    .help(canGenerateImages ? "调用当前图片模型生成这一张图片" : "请先在 AI 设置中配置图片生成模型")
+                                    .help(canGenerateImages ? "调用当前图片模型生成这一张图片" : "请先在 AI 设置中配置图片接口、模型和独立 Key")
                                     Button("复制提示词", systemImage: "doc.on.doc") {
                                         copyImagePromptAction(shot.prompt)
                                         showCopyFeedback("已复制绘图提示词")

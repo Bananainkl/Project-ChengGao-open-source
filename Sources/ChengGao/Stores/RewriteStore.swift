@@ -36,15 +36,20 @@ final class RewriteStore {
     var onlineAPIKeyDraft = ""
     var onlineImageEndpointDraft = ""
     var onlineImageModelDraft = ""
+    var onlineImageAPIKeyDraft = ""
     var onlineImageSize: OnlineImageGenerationSize = .automatic
     var onlineImageQuality: OnlineImageGenerationQuality = .automatic
     private(set) var hasOnlineAPIKey = false
+    private(set) var hasOnlineImageAPIKey = false
     private(set) var onlineAIStatus = "尚未配置"
     private(set) var onlineImageGenerationStatus = "尚未配置图片模型"
     private(set) var isTestingOnlineAI = false
     private(set) var onlineAvailableModels: [String] = []
     private(set) var onlineModelCatalogStatus = "尚未读取远程模型"
     private(set) var isLoadingOnlineModels = false
+    private(set) var onlineImageAvailableModels: [String] = []
+    private(set) var onlineImageModelCatalogStatus = "尚未读取图片模型"
+    private(set) var isLoadingOnlineImageModels = false
     var sourceText = ""
     var sourceURL = ""
     var output: RewriteOutput?
@@ -104,6 +109,7 @@ final class RewriteStore {
     private let extractor: any SourceExtracting
     private let defaults: UserDefaults
     private let historyURL: URL
+    private let imageCredentialServiceName: String?
     private var processingTask: Task<Void, Never>?
     private var imageGenerationTask: Task<Void, Never>?
     private var pendingResearchContent: ResearchContent?
@@ -114,13 +120,15 @@ final class RewriteStore {
         imageGenerator: any ImageGenerating = CompatibleImageGenerationClient(),
         extractor: any SourceExtracting = SourceExtractor(),
         defaults: UserDefaults = .standard,
-        historyURL: URL? = nil
+        historyURL: URL? = nil,
+        imageCredentialServiceName: String? = nil
     ) {
         self.pipeline = pipeline
         self.visualPromptGenerator = visualPromptGenerator
         self.imageGenerator = imageGenerator
         self.extractor = extractor
         self.defaults = defaults
+        self.imageCredentialServiceName = imageCredentialServiceName
         let resolvedHistoryURL = historyURL ?? Self.defaultHistoryURL
         self.historyURL = resolvedHistoryURL
         self.outputLanguage = OutputLanguage(
@@ -135,9 +143,16 @@ final class RewriteStore {
         self.modelMode = Self.normalizedLocalMode(savedModelMode)
         self.onlineTerminologyCheck = defaults.bool(forKey: "onlineTerminologyCheck")
         self.onlineReasoningEffort = OnlineAIReasoningEffort.load(defaults: defaults)
-        self.onlineProvider = OnlineAIProvider(
+        let loadedOnlineProvider = OnlineAIProvider(
             rawValue: defaults.string(forKey: "onlineAI.provider") ?? ""
         ) ?? .custom
+        let savedImageEndpointBeforeProviderReload = defaults.string(
+            forKey: "onlineAI.\(loadedOnlineProvider.rawValue).imageGeneration.endpoint"
+        ) ?? ""
+        let providerReloadRemovedCredential = OnlineImageGenerationConfiguration.looksLikeCredential(
+            savedImageEndpointBeforeProviderReload
+        )
+        self.onlineProvider = loadedOnlineProvider
         defaults.set(self.onlineProvider.rawValue, forKey: "onlineAI.provider")
         let onlineConfiguration = OnlineAIConfiguration.load(provider: self.onlineProvider, defaults: defaults)
         self.onlineEndpointDraft = onlineConfiguration.endpoint
@@ -146,7 +161,17 @@ final class RewriteStore {
             provider: self.onlineProvider,
             defaults: defaults
         )
-        self.onlineImageEndpointDraft = imageConfiguration.endpoint
+        let removedCredentialFromImageEndpoint = providerReloadRemovedCredential
+            || OnlineImageGenerationConfiguration.looksLikeCredential(imageConfiguration.endpoint)
+        if removedCredentialFromImageEndpoint {
+            OnlineImageGenerationConfiguration.removeSavedEndpoint(
+                provider: self.onlineProvider,
+                defaults: defaults
+            )
+            self.onlineImageEndpointDraft = ""
+        } else {
+            self.onlineImageEndpointDraft = imageConfiguration.endpoint
+        }
         self.onlineImageModelDraft = imageConfiguration.model
         self.onlineImageSize = imageConfiguration.size
         self.onlineImageQuality = imageConfiguration.quality
@@ -154,11 +179,25 @@ final class RewriteStore {
             for: self.onlineProvider,
             defaults: defaults
         )
+        self.onlineImageAvailableModels = Self.cachedOnlineImageModels(
+            for: self.onlineProvider,
+            defaults: defaults
+        )
         self.hasOnlineAPIKey = OnlineAICredentialStore.load(for: self.onlineProvider) != nil
+        self.hasOnlineImageAPIKey = OnlineImageCredentialStore.load(
+            for: self.onlineProvider,
+            serviceName: imageCredentialServiceName
+        ) != nil
         self.onlineAIStatus = Self.credentialStatus(for: self.onlineProvider)
-        self.onlineImageGenerationStatus = imageConfiguration.model.isEmpty
-            ? "尚未配置图片模型"
-            : "图片模型已配置 · \(imageConfiguration.model)"
+        if removedCredentialFromImageEndpoint {
+            self.onlineImageGenerationStatus = "检测到旧版把 Key 填在地址栏；已清除，请撤销旧 Key 后填写新 Key"
+        } else if imageConfiguration.model.isEmpty {
+            self.onlineImageGenerationStatus = "尚未配置图片模型"
+        } else if self.hasOnlineImageAPIKey {
+            self.onlineImageGenerationStatus = "图片接口与独立 Key 已配置"
+        } else {
+            self.onlineImageGenerationStatus = "图片模型已保留；还需要单独填写图片 API Key"
+        }
         self.modelMode = .onlinePreferred
         defaults.set(ModelMode.onlinePreferred.rawValue, forKey: "modelMode")
         self.statusMessage = self.hasOnlineAPIKey
@@ -407,9 +446,12 @@ final class RewriteStore {
             onlineImageGenerationStatus = "图片生成设置不完整"
             return
         }
-        guard let key = OnlineAICredentialStore.load(for: onlineProvider), !key.isEmpty else {
+        guard let key = OnlineImageCredentialStore.load(
+            for: onlineProvider,
+            serviceName: imageCredentialServiceName
+        ), !key.isEmpty else {
             errorMessage = ImageGenerationError.missingAPIKey.localizedDescription
-            onlineImageGenerationStatus = "当前提供商没有 API Key"
+            onlineImageGenerationStatus = "还没有单独保存图片 API Key"
             return
         }
         guard let shot = VisualShotPlanner.shots(for: current).first(where: { $0.id == shotID }) else {
@@ -466,9 +508,12 @@ final class RewriteStore {
             onlineImageGenerationStatus = "图片生成设置不完整"
             return
         }
-        guard let key = OnlineAICredentialStore.load(for: onlineProvider), !key.isEmpty else {
+        guard let key = OnlineImageCredentialStore.load(
+            for: onlineProvider,
+            serviceName: imageCredentialServiceName
+        ), !key.isEmpty else {
             errorMessage = ImageGenerationError.missingAPIKey.localizedDescription
-            onlineImageGenerationStatus = "当前提供商没有 API Key"
+            onlineImageGenerationStatus = "还没有单独保存图片 API Key"
             return
         }
         let originalShots = VisualShotPlanner.shots(for: current)
@@ -648,7 +693,7 @@ final class RewriteStore {
     }
 
     var canGenerateImages: Bool {
-        hasOnlineAPIKey
+        hasOnlineImageAPIKey
             && currentImageGenerationConfiguration.isValid(fallbackChatEndpoint: onlineEndpointDraft)
             && generatingImageShotID == nil
             && !isGeneratingAllImages
@@ -691,6 +736,9 @@ final class RewriteStore {
     }
 
     var resolvedImageGenerationEndpointDescription: String {
+        if OnlineImageGenerationConfiguration.looksLikeCredential(onlineImageEndpointDraft) {
+            return "检测到疑似 API Key：这里应填写 HTTP(S) 地址，内容不会保存"
+        }
         guard let endpoint = currentImageGenerationConfiguration.endpointURL(
             fallbackChatEndpoint: onlineEndpointDraft
         ) else {
@@ -701,12 +749,108 @@ final class RewriteStore {
 
     func saveOnlineImageGenerationConfiguration() {
         let configuration = currentImageGenerationConfiguration
+        if OnlineImageGenerationConfiguration.looksLikeCredential(configuration.endpoint) {
+            OnlineImageGenerationConfiguration.removeSavedEndpoint(
+                provider: onlineProvider,
+                defaults: defaults
+            )
+            onlineImageEndpointDraft = ""
+            onlineImageGenerationStatus = "已从地址栏清除疑似 Key；请撤销旧 Key，并在下方填写新图片 Key"
+            return
+        }
         guard configuration.isValid(fallbackChatEndpoint: onlineEndpointDraft) else {
             onlineImageGenerationStatus = "请填写图片模型，并确认图片 API 地址"
             return
         }
-        configuration.save(defaults: defaults)
-        onlineImageGenerationStatus = "图片生成设置已保存 · 复用 \(onlineProvider.displayName) Key"
+        let trimmedKey = onlineImageAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedKey.isEmpty, !OnlineAIProvider.custom.acceptsAPIKey(trimmedKey) {
+            onlineImageGenerationStatus = "图片 API Key 格式不正确，请粘贴完整的 Bearer Key"
+            return
+        }
+        do {
+            configuration.save(defaults: defaults)
+            var storage = OnlineImageCredentialStore.storage(
+                for: onlineProvider,
+                serviceName: imageCredentialServiceName
+            )
+            if !trimmedKey.isEmpty {
+                storage = try OnlineImageCredentialStore.save(
+                    trimmedKey,
+                    for: onlineProvider,
+                    serviceName: imageCredentialServiceName
+                )
+                onlineImageAPIKeyDraft = ""
+            }
+            hasOnlineImageAPIKey = OnlineImageCredentialStore.load(
+                for: onlineProvider,
+                serviceName: imageCredentialServiceName
+            ) != nil
+            guard hasOnlineImageAPIKey else {
+                onlineImageGenerationStatus = "图片地址与模型已保存；还需要单独填写图片 API Key"
+                return
+            }
+            onlineImageGenerationStatus = "图片接口、模型和独立 Key 已保存到\(storage?.label ?? "本机")"
+        } catch {
+            onlineImageGenerationStatus = error.localizedDescription
+        }
+    }
+
+    var onlineImageCredentialEntryHint: String {
+        if hasOnlineImageAPIKey {
+            return "图片 Key 已独立保存；留空继续使用，输入新 Key 可替换。"
+        }
+        return "请单独填写图片接口的 API Key；不会自动复用聊天 Key。"
+    }
+
+    func refreshOnlineImageModelCatalog() {
+        guard !isLoadingOnlineImageModels else { return }
+        let configuration = currentImageGenerationConfiguration
+        if OnlineImageGenerationConfiguration.looksLikeCredential(configuration.endpoint) {
+            onlineImageModelCatalogStatus = "图片地址栏检测到疑似 Key，请先清除并换新"
+            return
+        }
+        guard let endpoint = configuration.endpointURL(fallbackChatEndpoint: onlineEndpointDraft) else {
+            onlineImageModelCatalogStatus = "请先填写有效的图片 API 地址"
+            return
+        }
+        let draftKey = onlineImageAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !draftKey.isEmpty, !OnlineAIProvider.custom.acceptsAPIKey(draftKey) {
+            onlineImageModelCatalogStatus = "图片 API Key 格式不完整"
+            return
+        }
+        let key = draftKey.isEmpty
+            ? OnlineImageCredentialStore.load(
+                for: onlineProvider,
+                serviceName: imageCredentialServiceName
+            )
+            : draftKey
+        guard let key, !key.isEmpty else {
+            onlineImageModelCatalogStatus = "请先输入或保存图片 API Key"
+            return
+        }
+        isLoadingOnlineImageModels = true
+        onlineImageModelCatalogStatus = "正在从图片接口读取模型列表…"
+        Task {
+            await loadOnlineImageModelCatalog(endpoint: endpoint.absoluteString, key: key)
+        }
+    }
+
+    func deleteOnlineImageAPIKey() {
+        do {
+            let storage = OnlineImageCredentialStore.storage(
+                for: onlineProvider,
+                serviceName: imageCredentialServiceName
+            )
+            try OnlineImageCredentialStore.delete(
+                for: onlineProvider,
+                serviceName: imageCredentialServiceName
+            )
+            onlineImageAPIKeyDraft = ""
+            hasOnlineImageAPIKey = false
+            onlineImageGenerationStatus = "已从\(storage?.label ?? "本机凭证存储")删除图片 API Key"
+        } catch {
+            onlineImageGenerationStatus = error.localizedDescription
+        }
     }
 
     var onlineCredentialEntryHint: String {
@@ -823,7 +967,6 @@ final class RewriteStore {
             onlineAvailableModels = []
             onlineModelCatalogStatus = "尚未读取远程模型"
             onlineAIStatus = "已从\(storage?.label ?? "本机凭证存储")删除 \(onlineProvider.displayName) API Key"
-            onlineImageGenerationStatus = "图片设置已保留；生成前需重新配置 API Key"
             modelMode = .onlinePreferred
         } catch {
             onlineAIStatus = error.localizedDescription
@@ -844,18 +987,45 @@ final class RewriteStore {
         )
         onlineEndpointDraft = configuration.endpoint
         onlineModelDraft = configuration.model
-        onlineImageEndpointDraft = imageConfiguration.endpoint
+        let removedCredentialFromImageEndpoint = OnlineImageGenerationConfiguration.looksLikeCredential(
+            imageConfiguration.endpoint
+        )
+        if removedCredentialFromImageEndpoint {
+            OnlineImageGenerationConfiguration.removeSavedEndpoint(
+                provider: onlineProvider,
+                defaults: defaults
+            )
+            onlineImageEndpointDraft = ""
+        } else {
+            onlineImageEndpointDraft = imageConfiguration.endpoint
+        }
         onlineImageModelDraft = imageConfiguration.model
         onlineImageSize = imageConfiguration.size
         onlineImageQuality = imageConfiguration.quality
         onlineAPIKeyDraft = ""
+        onlineImageAPIKeyDraft = ""
         hasOnlineAPIKey = OnlineAICredentialStore.load(for: onlineProvider) != nil
+        hasOnlineImageAPIKey = OnlineImageCredentialStore.load(
+            for: onlineProvider,
+            serviceName: imageCredentialServiceName
+        ) != nil
         onlineAIStatus = Self.credentialStatus(for: onlineProvider)
-        onlineImageGenerationStatus = imageConfiguration.model.isEmpty
-            ? "尚未配置图片模型"
-            : "图片模型已配置 · \(imageConfiguration.model)"
+        if removedCredentialFromImageEndpoint {
+            onlineImageGenerationStatus = "检测到旧版把 Key 填在地址栏；已清除，请撤销旧 Key 后填写新 Key"
+        } else if imageConfiguration.model.isEmpty {
+            onlineImageGenerationStatus = "尚未配置图片模型"
+        } else if hasOnlineImageAPIKey {
+            onlineImageGenerationStatus = "图片接口与独立 Key 已配置"
+        } else {
+            onlineImageGenerationStatus = "图片模型已保留；还需要单独填写图片 API Key"
+        }
         onlineAvailableModels = Self.cachedOnlineModels(for: onlineProvider, defaults: defaults)
+        onlineImageAvailableModels = Self.cachedOnlineImageModels(
+            for: onlineProvider,
+            defaults: defaults
+        )
         onlineModelCatalogStatus = "尚未读取远程模型"
+        onlineImageModelCatalogStatus = "尚未读取图片模型"
         modelMode = .onlinePreferred
     }
 
@@ -880,6 +1050,27 @@ final class RewriteStore {
         }
     }
 
+    private func loadOnlineImageModelCatalog(endpoint: String, key: String) async {
+        isLoadingOnlineImageModels = true
+        defer { isLoadingOnlineImageModels = false }
+        do {
+            let models = try await OnlineAIModelCatalogClient().fetchModels(
+                endpoint: endpoint,
+                apiKey: key
+            )
+            onlineImageAvailableModels = models
+            defaults.set(models, forKey: Self.onlineImageModelCatalogKey(for: onlineProvider))
+            if onlineImageModelDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let first = models.first {
+                onlineImageModelDraft = first
+            }
+            onlineImageModelCatalogStatus = "已读取 \(models.count) 个图片接口模型"
+        } catch {
+            onlineImageAvailableModels = []
+            onlineImageModelCatalogStatus = error.localizedDescription
+        }
+    }
+
     private static func credentialStatus(for provider: OnlineAIProvider) -> String {
         guard let storage = OnlineAICredentialStore.storage(for: provider) else {
             return "尚未配置 API Key"
@@ -891,11 +1082,22 @@ final class RewriteStore {
         "onlineAI.\(provider.rawValue).availableModels"
     }
 
+    private static func onlineImageModelCatalogKey(for provider: OnlineAIProvider) -> String {
+        "onlineAI.\(provider.rawValue).imageGeneration.availableModels"
+    }
+
     private static func cachedOnlineModels(
         for provider: OnlineAIProvider,
         defaults: UserDefaults
     ) -> [String] {
         defaults.stringArray(forKey: onlineModelCatalogKey(for: provider)) ?? []
+    }
+
+    private static func cachedOnlineImageModels(
+        for provider: OnlineAIProvider,
+        defaults: UserDefaults
+    ) -> [String] {
+        defaults.stringArray(forKey: onlineImageModelCatalogKey(for: provider)) ?? []
     }
 
     func copyOutput() {

@@ -136,24 +136,53 @@ struct SettingsView: View {
                 .textFieldStyle(.roundedBorder)
                 Text(store.resolvedImageGenerationEndpointDescription)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(
+                        OnlineImageGenerationConfiguration.looksLikeCredential(store.onlineImageEndpointDraft)
+                            ? Color.red
+                            : Color.secondary
+                    )
+
+                LabeledContent("图片 API Key") {
+                    SecureField(
+                        store.hasOnlineImageAPIKey ? "已独立保存；输入新 Key 可替换" : "图片接口 Bearer API Key",
+                        text: $store.onlineImageAPIKeyDraft
+                    )
+                    .textFieldStyle(.roundedBorder)
+                }
+                Label(
+                    store.onlineImageCredentialEntryHint,
+                    systemImage: store.hasOnlineImageAPIKey ? "checkmark.shield.fill" : "key"
+                )
+                .font(.caption)
+                .foregroundStyle(store.hasOnlineImageAPIKey ? .green : .secondary)
 
                 LabeledContent("图片模型") {
                     TextField("例如 gpt-image-1 或中转站提供的模型 ID", text: $store.onlineImageModelDraft)
                         .textFieldStyle(.roundedBorder)
                 }
-                if !store.onlineAvailableModels.isEmpty {
-                    Picker("从远程模型中选择", selection: $store.onlineImageModelDraft) {
-                        if store.onlineImageModelDraft.isEmpty {
-                            Text("请选择图片模型").tag("")
-                        } else if !store.onlineAvailableModels.contains(store.onlineImageModelDraft) {
-                            Text("当前：\(store.onlineImageModelDraft)").tag(store.onlineImageModelDraft)
+                HStack {
+                    if !store.onlineImageAvailableModels.isEmpty {
+                        Picker("图片接口可用模型", selection: $store.onlineImageModelDraft) {
+                            if store.onlineImageModelDraft.isEmpty {
+                                Text("请选择图片模型").tag("")
+                            } else if !store.onlineImageAvailableModels.contains(store.onlineImageModelDraft) {
+                                Text("当前：\(store.onlineImageModelDraft)").tag(store.onlineImageModelDraft)
+                            }
+                            ForEach(store.onlineImageAvailableModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
                         }
-                        ForEach(store.onlineAvailableModels, id: \.self) { model in
-                            Text(model).tag(model)
-                        }
+                        .pickerStyle(.menu)
                     }
-                    .pickerStyle(.menu)
+                    Button("读取图片模型", action: store.refreshOnlineImageModelCatalog)
+                        .disabled(store.isLoadingOnlineImageModels)
+                    if store.isLoadingOnlineImageModels {
+                        ProgressView().controlSize(.small)
+                    }
+                    Spacer()
+                    Text(store.onlineImageModelCatalogStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 HStack {
@@ -172,12 +201,15 @@ struct SettingsView: View {
                 HStack {
                     Button("保存图片生成设置", action: store.saveOnlineImageGenerationConfiguration)
                         .buttonStyle(.borderedProminent)
+                    if store.hasOnlineImageAPIKey {
+                        Button("删除图片 Key", role: .destructive, action: store.deleteOnlineImageAPIKey)
+                    }
                     Spacer()
                     Label(store.onlineImageGenerationStatus, systemImage: "photo.badge.checkmark")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text("图片请求复用当前提供商的 API Key，不会把 Key 写入文稿或安装包。兼容中转站返回 image_url、url 或 b64_json；只有在处理结果页点击生成时才会产生图片调用和可能的费用。")
+                Text("图片 Key 与聊天 Key 分开保存、互不覆盖；读取图片模型和实际生图只使用图片 Key。兼容中转站返回 image_url、url 或 b64_json；只有读取模型或在处理结果页点击生成时才会调用图片接口，并可能产生费用。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -273,6 +273,33 @@ struct OnlineImageGenerationConfiguration: Equatable, Sendable {
         defaults.set(quality.rawValue, forKey: "\(prefix).quality")
     }
 
+    static func removeSavedEndpoint(
+        provider: OnlineAIProvider,
+        defaults: UserDefaults = .standard
+    ) {
+        defaults.removeObject(forKey: "onlineAI.\(provider.rawValue).imageGeneration.endpoint")
+    }
+
+    /// Detect common credential shapes without treating a malformed host name
+    /// as a secret. This is used to keep accidentally pasted keys out of the
+    /// plain-text endpoint field and UserDefaults.
+    static func looksLikeCredential(_ value: String) -> Bool {
+        let candidate = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !candidate.isEmpty,
+              OnlineAIConfiguration.chatCompletionsURL(from: candidate) == nil else { return false }
+        let lowered = candidate.lowercased()
+        let knownPrefixes = ["sk-", "sk_", "key-", "api-key-", "bearer-"]
+        if knownPrefixes.contains(where: lowered.hasPrefix) { return candidate.count >= 16 }
+        guard candidate.count >= 24,
+              !candidate.contains(where: \.isWhitespace),
+              !candidate.contains("/"),
+              !candidate.contains("."),
+              !candidate.contains(":") else { return false }
+        return candidate.unicodeScalars.allSatisfy {
+            CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_=")).contains($0)
+        }
+    }
+
     /// Accept a relay base URL, a Chat Completions URL, or a complete Images
     /// API URL. Leaving the dedicated image endpoint blank reuses the current
     /// chat host and replaces `/chat/completions` with `/images/generations`.

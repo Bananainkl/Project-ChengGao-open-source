@@ -419,6 +419,27 @@ struct OfflineRewritePipelineTests {
         #expect(explicit.absoluteString == "https://images.example.com/openai/v1/images/generations")
     }
 
+    @Test("Image endpoint rejects pasted credentials without rejecting valid URLs")
+    func imageEndpointCredentialDetection() {
+        #expect(OnlineImageGenerationConfiguration.looksLikeCredential("sk-test-placeholder-1234567890"))
+        #expect(OnlineImageGenerationConfiguration.looksLikeCredential("AbCdEfGhIjKlMnOpQrStUvWxYz123456"))
+        #expect(!OnlineImageGenerationConfiguration.looksLikeCredential("https://images.example.com/v1"))
+        #expect(!OnlineImageGenerationConfiguration.looksLikeCredential("images.example.com"))
+    }
+
+    @Test("Image model catalog is derived from the image endpoint")
+    func imageModelCatalogEndpoint() throws {
+        let standard = try #require(OnlineAIModelCatalogClient.modelsEndpoint(
+            from: "https://images.example.com/v1/images/generations"
+        ))
+        #expect(standard.absoluteString == "https://images.example.com/v1/models")
+
+        let relay = try #require(OnlineAIModelCatalogClient.modelsEndpoint(
+            from: "https://relay.example.com/openai/v1/images/generations"
+        ))
+        #expect(relay.absoluteString == "https://relay.example.com/openai/v1/models")
+    }
+
     @Test("Image request uses the selected relay model, aspect ratio and quality")
     func compatibleImageRequestShape() {
         let configuration = OnlineImageGenerationConfiguration(
@@ -530,6 +551,84 @@ struct OfflineRewritePipelineTests {
         #expect(OnlineAICredentialStore.load(for: .custom, serviceName: service) == "test-key")
         try OnlineAICredentialStore.delete(for: .custom, serviceName: service)
         #expect(OnlineAICredentialStore.load(for: .custom, serviceName: service) == nil)
+    }
+
+    @Test("Image credentials use storage isolated from chat credentials")
+    func imageCredentialIsolation() throws {
+        let chatService = "com.itou.chenggao.tests.chat.\(UUID().uuidString)"
+        let imageService = "com.itou.chenggao.tests.image.\(UUID().uuidString)"
+        defer {
+            try? OnlineAICredentialStore.delete(for: .custom, serviceName: chatService)
+            try? OnlineImageCredentialStore.delete(for: .custom, serviceName: imageService)
+        }
+        try OnlineAICredentialStore.save("chat-test-key", for: .custom, serviceName: chatService)
+        try OnlineImageCredentialStore.save("image-test-key", for: .custom, serviceName: imageService)
+        #expect(OnlineAICredentialStore.load(for: .custom, serviceName: chatService) == "chat-test-key")
+        #expect(OnlineImageCredentialStore.load(for: .custom, serviceName: imageService) == "image-test-key")
+
+        try OnlineImageCredentialStore.delete(for: .custom, serviceName: imageService)
+        #expect(OnlineImageCredentialStore.load(for: .custom, serviceName: imageService) == nil)
+        #expect(OnlineAICredentialStore.load(for: .custom, serviceName: chatService) == "chat-test-key")
+    }
+
+    @Test("Store clears a credential pasted into the image endpoint")
+    @MainActor
+    func imageEndpointCredentialMigration() {
+        let suite = "ImageEndpointMigration-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(OnlineAIProvider.custom.rawValue, forKey: "onlineAI.provider")
+        defaults.set("https://chat.example.com/v1/chat/completions", forKey: "onlineAI.custom.endpoint")
+        defaults.set("chat-model", forKey: "onlineAI.custom.model")
+        defaults.set(
+            "sk-test-placeholder-1234567890",
+            forKey: "onlineAI.custom.imageGeneration.endpoint"
+        )
+        defaults.set("image-model", forKey: "onlineAI.custom.imageGeneration.model")
+
+        let store = RewriteStore(
+            pipeline: StubPipeline(),
+            defaults: defaults,
+            historyURL: FileManager.default.temporaryDirectory
+                .appending(path: "image-endpoint-migration-\(UUID().uuidString).json"),
+            imageCredentialServiceName: "com.itou.chenggao.tests.image.\(UUID().uuidString)"
+        )
+        #expect(store.onlineImageEndpointDraft.isEmpty)
+        #expect(defaults.string(forKey: "onlineAI.custom.imageGeneration.endpoint") == nil)
+        #expect(store.onlineImageGenerationStatus.contains("已清除"))
+    }
+
+    @Test("Store saves and deletes a dedicated image key")
+    @MainActor
+    func dedicatedImageCredentialLifecycle() {
+        let suite = "ImageCredentialLifecycle-\(UUID().uuidString)"
+        let service = "com.itou.chenggao.tests.image.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? OnlineImageCredentialStore.delete(for: .custom, serviceName: service)
+        }
+        defaults.set(OnlineAIProvider.custom.rawValue, forKey: "onlineAI.provider")
+        defaults.set("https://chat.example.com/v1/chat/completions", forKey: "onlineAI.custom.endpoint")
+        defaults.set("chat-model", forKey: "onlineAI.custom.model")
+        let store = RewriteStore(
+            pipeline: StubPipeline(),
+            defaults: defaults,
+            historyURL: FileManager.default.temporaryDirectory
+                .appending(path: "image-key-lifecycle-\(UUID().uuidString).json"),
+            imageCredentialServiceName: service
+        )
+        store.onlineImageEndpointDraft = "https://images.example.com/v1/images/generations"
+        store.onlineImageModelDraft = "image-model"
+        store.onlineImageAPIKeyDraft = "image-test-key-123456"
+        store.saveOnlineImageGenerationConfiguration()
+
+        #expect(store.hasOnlineImageAPIKey)
+        #expect(store.canGenerateImages)
+        #expect(OnlineImageCredentialStore.load(for: .custom, serviceName: service) == "image-test-key-123456")
+        store.deleteOnlineImageAPIKey()
+        #expect(!store.hasOnlineImageAPIKey)
+        #expect(!store.canGenerateImages)
     }
 
     @Test("OpenRouter response records the actual routed model")

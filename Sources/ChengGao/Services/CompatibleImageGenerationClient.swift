@@ -15,7 +15,7 @@ enum ImageGenerationError: LocalizedError, Sendable {
         case .invalidConfiguration:
             "请先在 AI 设置中填写图片生成模型，并确认图片 API 地址。"
         case .missingAPIKey:
-            "当前在线 AI 提供商还没有可复用的 API Key。"
+            "还没有单独保存图片 API Key，请先在 AI 设置的图片生成区域配置。"
         case .requestFailed(let status, let message):
             "图片生成请求失败（HTTP \(status)）：\(message)"
         case .invalidResponse:

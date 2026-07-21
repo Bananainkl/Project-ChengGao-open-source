@@ -31,9 +31,13 @@ struct OnlineAIModelCatalogClient: Sendable {
     }
 
     func fetchModels(configuration: OnlineAIConfiguration, apiKey: String) async throws -> [String] {
+        try await fetchModels(endpoint: configuration.endpoint, apiKey: apiKey)
+    }
+
+    func fetchModels(endpoint sourceEndpoint: String, apiKey: String) async throws -> [String] {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw OnlineAIModelCatalogError.missingAPIKey }
-        guard let endpoint = Self.modelsEndpoint(from: configuration.endpoint) else {
+        guard let endpoint = Self.modelsEndpoint(from: sourceEndpoint) else {
             throw OnlineAIModelCatalogError.invalidEndpoint
         }
         var request = URLRequest(url: endpoint)
@@ -56,16 +60,30 @@ struct OnlineAIModelCatalogClient: Sendable {
         return models
     }
 
-    static func modelsEndpoint(from chatCompletionsEndpoint: String) -> URL? {
-        guard let chatURL = OnlineAIConfiguration.chatCompletionsURL(from: chatCompletionsEndpoint),
-              var components = URLComponents(url: chatURL, resolvingAgainstBaseURL: false) else { return nil }
+    static func modelsEndpoint(from sourceEndpoint: String) -> URL? {
+        let trimmed = sourceEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(),
+              ["https", "http"].contains(scheme),
+              components.host != nil else { return nil }
 
         var path = components.path
-        let knownSuffixes = ["/chat/completions/", "/chat/completions", "/responses/", "/responses"]
-        if let suffix = knownSuffixes.first(where: { path.hasSuffix($0) }) {
+        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
+        let knownSuffixes = [
+            "/chat/completions", "/images/generations", "/responses"
+        ]
+        let removedKnownSuffix: Bool
+        if let suffix = knownSuffixes.first(where: { path.lowercased().hasSuffix($0) }) {
             path.removeLast(suffix.count)
+            removedKnownSuffix = true
+        } else {
+            removedKnownSuffix = false
         }
-        if path.hasSuffix("/") { path.removeLast() }
+        if path.isEmpty || path == "/" {
+            path = "/v1"
+        } else if !removedKnownSuffix, !path.lowercased().hasSuffix("/v1") {
+            path += "/v1"
+        }
         components.path = path + "/models"
         components.query = nil
         components.fragment = nil

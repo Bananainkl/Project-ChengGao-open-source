@@ -50,9 +50,12 @@ enum OnlineAICredentialStore {
         try FileManager.default.removeItem(at: url)
     }
 
-    static func storage(for provider: OnlineAIProvider) -> OnlineAICredentialStorage? {
+    static func storage(
+        for provider: OnlineAIProvider,
+        serviceName: String? = nil
+    ) -> OnlineAICredentialStorage? {
         FileManager.default.fileExists(
-            atPath: protectedFileURL(provider: provider, serviceName: service).path
+            atPath: protectedFileURL(provider: provider, serviceName: serviceName ?? service).path
         ) ? .protectedFile : nil
     }
 
@@ -63,5 +66,49 @@ enum OnlineAICredentialStore {
         return base
             .appending(path: "com.itou.chenggao/Credentials", directoryHint: .isDirectory)
             .appending(path: "\(safeService)-\(provider.rawValue).key")
+    }
+}
+
+/// Image credentials are deliberately isolated from chat credentials. A relay
+/// can use a different host, account, permission scope, or billing key for
+/// image generation, so changing either credential must not affect the other.
+enum OnlineImageCredentialStore {
+    private static let service = "com.itou.chenggao.online-image-ai"
+
+    static func load(for provider: OnlineAIProvider, serviceName: String? = nil) -> String? {
+        OnlineAICredentialStore.load(
+            for: provider,
+            serviceName: serviceName ?? service
+        )
+    }
+
+    @discardableResult
+    static func save(
+        _ value: String,
+        for provider: OnlineAIProvider,
+        serviceName: String? = nil
+    ) throws -> OnlineAICredentialStorage {
+        try OnlineAICredentialStore.save(
+            value,
+            for: provider,
+            serviceName: serviceName ?? service
+        )
+    }
+
+    static func delete(for provider: OnlineAIProvider, serviceName: String? = nil) throws {
+        try OnlineAICredentialStore.delete(
+            for: provider,
+            serviceName: serviceName ?? service
+        )
+    }
+
+    static func storage(
+        for provider: OnlineAIProvider,
+        serviceName: String? = nil
+    ) -> OnlineAICredentialStorage? {
+        OnlineAICredentialStore.storage(
+            for: provider,
+            serviceName: serviceName ?? service
+        )
     }
 }
