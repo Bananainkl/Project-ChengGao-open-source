@@ -634,6 +634,9 @@ struct RewriteOutput: Equatable, Codable, Sendable {
 
     var body: String { revisedBody }
     var effectiveVisualStyle: VisualStyle { visualStyle ?? .automatic }
+    var subtitleReadyBody: String {
+        style == .spoken ? SpokenSubtitleFormatter.format(revisedBody) : revisedBody
+    }
 }
 
 struct RewriteHistoryItem: Identifiable, Equatable, Codable, Sendable {

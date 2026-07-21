@@ -4,6 +4,7 @@ struct ShortVideoExportPackageResult: Equatable, Sendable {
     let directoryURL: URL
     let manuscriptURL: URL
     let storyboardURL: URL
+    let subtitleTextURL: URL?
     let copiedImageCount: Int
     let missingImageCount: Int
 }
@@ -44,6 +45,7 @@ enum ShortVideoExportPackage {
         let imageDirectory = stagingDirectory.appending(path: "图片", directoryHint: .isDirectory)
         let manuscriptURL = stagingDirectory.appending(path: "改写文稿.md")
         let storyboardURL = stagingDirectory.appending(path: "分镜与配图提示词.md")
+        let subtitleTextURL = stagingDirectory.appending(path: "口播字幕.txt")
 
         do {
             try fileManager.createDirectory(at: imageDirectory, withIntermediateDirectories: true)
@@ -80,12 +82,19 @@ enum ShortVideoExportPackage {
                 shots: shots,
                 exportedImages: exportedImages
             ).write(to: storyboardURL, atomically: true, encoding: .utf8)
+            if output.style == .spoken {
+                try output.subtitleReadyBody
+                    .write(to: subtitleTextURL, atomically: true, encoding: .utf8)
+            }
             try fileManager.moveItem(at: stagingDirectory, to: finalDirectory)
 
             return ShortVideoExportPackageResult(
                 directoryURL: finalDirectory,
                 manuscriptURL: finalDirectory.appending(path: manuscriptURL.lastPathComponent),
                 storyboardURL: finalDirectory.appending(path: storyboardURL.lastPathComponent),
+                subtitleTextURL: output.style == .spoken
+                    ? finalDirectory.appending(path: subtitleTextURL.lastPathComponent)
+                    : nil,
                 copiedImageCount: exportedImages.count,
                 missingImageCount: max(0, shots.count - exportedImages.count)
             )
@@ -114,15 +123,18 @@ enum ShortVideoExportPackage {
     }
 
     static func manuscriptMarkdown(output: RewriteOutput) -> String {
-        """
+        let bodyHeading = output.style == .spoken
+            ? "字幕式口播稿（一句话一行）"
+            : "改写后的完整文稿"
+        return """
         # \(flatten(output.title))
 
         - 输出类型：\(output.style.rawValue)
         - 画面风格：\(output.effectiveVisualStyle.rawValue)
 
-        ## 改写后的完整文稿
+        ## \(bodyHeading)
 
-        \(output.revisedBody.trimmingCharacters(in: .whitespacesAndNewlines))
+        \(output.subtitleReadyBody.trimmingCharacters(in: .whitespacesAndNewlines))
         """
     }
 

@@ -211,8 +211,8 @@ struct OutputView: View {
 
         case .revised:
             resultSection(
-                number: "03", title: "修改后的完整文稿",
-                subtitle: isEditingDraft ? "正在编辑" : "已生成 · 可编辑保存"
+                number: "03", title: revisedPageTitle,
+                subtitle: isEditingDraft ? "正在编辑" : revisedPageSubtitle
             ) {
                 if isEditingDraft {
                     VStack(alignment: .leading, spacing: 12) {
@@ -253,7 +253,7 @@ struct OutputView: View {
                             resetDraftEditor()
                             isEditingDraft = true
                         }
-                        documentCard(output.revisedBody, emphasized: true)
+                        documentCard(output.subtitleReadyBody, emphasized: true)
                     }
                 }
             }
@@ -455,6 +455,14 @@ struct OutputView: View {
         }
     }
 
+    private var revisedPageTitle: String {
+        output.style == .spoken ? "字幕式口播稿" : "修改后的完整文稿"
+    }
+
+    private var revisedPageSubtitle: String {
+        output.style == .spoken ? "一句话一行 · 可编辑保存" : "已生成 · 可编辑保存"
+    }
+
     private var rawSourceDisclosureTitle: String {
         switch output.transcriptOrigin {
         case .webArticle, .socialImageText: "查看净化前取得的网页正文"
@@ -473,6 +481,6 @@ struct OutputView: View {
 
     private func resetDraftEditor() {
         editedTitle = output.title
-        editedBody = output.revisedBody
+        editedBody = output.subtitleReadyBody
     }
 }

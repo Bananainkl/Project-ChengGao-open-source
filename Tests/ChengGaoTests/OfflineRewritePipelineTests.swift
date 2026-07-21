@@ -1890,6 +1890,49 @@ struct OfflineRewritePipelineTests {
         )
     }
 
+    @Test("Formats a short-video script as one complete sentence per subtitle line")
+    func spokenSubtitleLines() {
+        let source = """
+        第一句。第二句！“第三句？”
+
+        版本是1.20.4，不要拆小数。英文 U.S. works. Hello. Next. 最后一句……
+        """
+        let expected = """
+        第一句。
+        第二句！
+        “第三句？”
+        版本是1.20.4，不要拆小数。
+        英文 U.S. works.
+        Hello.
+        Next.
+        最后一句……
+        """
+
+        let formatted = SpokenSubtitleFormatter.format(source)
+
+        #expect(formatted == expected)
+        #expect(SpokenSubtitleFormatter.format(formatted) == expected)
+        #expect(!formatted.contains("\n\n"))
+    }
+
+    @Test("Only short-video spoken output uses subtitle-style delivery lines")
+    func subtitleReadyBodyIsStyleSpecific() {
+        let body = "第一句话。第二句话！\n\n第三句话？"
+        let spoken = RewriteOutput(
+            title: "短视频", rawTranscript: "原稿", originalTranscript: "原稿",
+            corrections: [], suggestions: [], revisedBody: body, notes: "",
+            transcriptOrigin: .pastedText, style: .spoken
+        )
+        let article = RewriteOutput(
+            title: "文章", rawTranscript: "原稿", originalTranscript: "原稿",
+            corrections: [], suggestions: [], revisedBody: body, notes: "",
+            transcriptOrigin: .pastedText, style: .article
+        )
+
+        #expect(spoken.subtitleReadyBody == "第一句话。\n第二句话！\n第三句话？")
+        #expect(article.subtitleReadyBody == body)
+    }
+
     @Test("Exports a title-named package with manuscript storyboard and available images")
     func shortVideoPackageExport() throws {
         let root = FileManager.default.temporaryDirectory
@@ -1902,7 +1945,8 @@ struct OfflineRewritePipelineTests {
         try imageBytes.write(to: sourceImage)
         let output = RewriteOutput(
             title: "测试/短片:版本?", rawTranscript: "原稿", originalTranscript: "原稿",
-            corrections: [], suggestions: [], revisedBody: "这是改写完成的短视频文稿。", notes: "",
+            corrections: [], suggestions: [],
+            revisedBody: "这是改写完成的短视频文稿。第二句话直接用于剪映！", notes: "",
             transcriptOrigin: .pastedText, style: .spoken,
             visualStyle: .clayStopMotion,
             visualShots: [
@@ -1930,12 +1974,17 @@ struct OfflineRewritePipelineTests {
         #expect(result.missingImageCount == 1)
         #expect(FileManager.default.fileExists(atPath: result.manuscriptURL.path))
         #expect(FileManager.default.fileExists(atPath: result.storyboardURL.path))
+        #expect(result.subtitleTextURL != nil)
+        #expect(FileManager.default.fileExists(atPath: result.subtitleTextURL?.path ?? ""))
         let copiedImage = result.directoryURL.appending(path: "图片/01.png")
         #expect(try Data(contentsOf: copiedImage) == imageBytes)
 
         let manuscript = try String(contentsOf: result.manuscriptURL, encoding: .utf8)
         let storyboard = try String(contentsOf: result.storyboardURL, encoding: .utf8)
-        #expect(manuscript.contains("这是改写完成的短视频文稿。"))
+        let subtitleText = try String(contentsOf: result.subtitleTextURL!, encoding: .utf8)
+        #expect(manuscript.contains("## 字幕式口播稿（一句话一行）"))
+        #expect(manuscript.contains("这是改写完成的短视频文稿。\n第二句话直接用于剪映！"))
+        #expect(subtitleText == "这是改写完成的短视频文稿。\n第二句话直接用于剪映！")
         #expect(manuscript.contains("画面风格：粘土定格动画"))
         #expect(storyboard.contains("已输出：[图片/01.png](图片/01.png)"))
         #expect(storyboard.contains("未生成或原图片已不可用"))
@@ -2123,15 +2172,20 @@ struct OfflineRewritePipelineTests {
             try await Task.sleep(for: .milliseconds(20))
         }
         let historyID = try #require(store.history.first?.id)
-        store.saveEditedDraft(title: "人工修改的标题", revisedBody: "这是人工修改并保存后的完整成稿。", historyID: historyID)
+        store.saveEditedDraft(
+            title: "人工修改的标题",
+            revisedBody: "这是人工修改并保存后的完整成稿。第二句话保持独立一行！",
+            historyID: historyID
+        )
         #expect(store.history.first?.title == "人工修改的标题")
-        #expect(store.history.first?.output.revisedBody == "这是人工修改并保存后的完整成稿。")
+        #expect(store.history.first?.output.revisedBody == "这是人工修改并保存后的完整成稿。\n第二句话保持独立一行！")
 
         let reloaded = RewriteStore(
             pipeline: StubPipeline(), extractor: StubExtractor(),
             defaults: defaults, historyURL: historyURL
         )
         #expect(reloaded.history.first?.title == "人工修改的标题")
+        #expect(reloaded.history.first?.output.revisedBody == "这是人工修改并保存后的完整成稿。\n第二句话保持独立一行！")
         #expect(reloaded.history.first?.output.notes.contains("用户手动编辑") == true)
     }
 

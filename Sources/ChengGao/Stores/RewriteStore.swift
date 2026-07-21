@@ -1122,7 +1122,7 @@ final class RewriteStore {
         case .suggestions:
             value = suggestionsText(for: output)
         case .revised:
-            value = "修改后的完整文稿\n\n\(output.revisedBody)"
+            value = "\(revisedHeading(for: output))\n\n\(output.subtitleReadyBody)"
         case .visuals:
             value = visualsText(for: output)
         }
@@ -1193,7 +1193,9 @@ final class RewriteStore {
                 ?? latestResultOutput else { return }
         var edited = current
         edited.title = cleanTitle
-        edited.revisedBody = cleanBody
+        edited.revisedBody = current.style == .spoken
+            ? SpokenSubtitleFormatter.format(cleanBody)
+            : cleanBody
         if !edited.notes.contains("用户手动编辑") {
             edited.notes += " 成稿已由用户手动编辑。"
         }
@@ -1231,8 +1233,8 @@ final class RewriteStore {
         第二部分：对应修改建议
         \(suggestions)
 
-        第三部分：修改后的完整文稿
-        \(output.revisedBody)
+        第三部分：\(revisedHeading(for: output))
+        \(output.subtitleReadyBody)
 
         第四部分：配图建议
         \(visuals)
@@ -1258,6 +1260,10 @@ final class RewriteStore {
         case .article: "净化并校对后的文章正文"
         case .social: "整理并校对后的原始文案"
         }
+    }
+
+    private func revisedHeading(for output: RewriteOutput) -> String {
+        output.style == .spoken ? "字幕式口播稿（一句话一行）" : "修改后的完整文稿"
     }
 
     private func copyToPasteboard(_ value: String) {
