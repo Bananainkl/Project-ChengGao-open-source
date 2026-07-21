@@ -193,7 +193,7 @@ struct ComposerView: View {
         VStack(alignment: .leading, spacing: 2) {
             Label("AI 控制器", systemImage: "cpu")
                 .font(.subheadline.weight(.semibold))
-            Text(store.onlineProvider.displayName)
+            Text(store.selectedAIControllerProviderLabel)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -202,6 +202,30 @@ struct ComposerView: View {
     private var aiControllerControls: some View {
         HStack(spacing: 10) {
             Menu {
+                Section("网页 AI") {
+                    ForEach(WebAIProvider.allCases) { provider in
+                        Button {
+                            if !(store.webAIEnabled && store.webAIProvider == provider) {
+                                store.chooseWebAIFromController(provider)
+                            }
+                        } label: {
+                            if store.webAIEnabled && store.webAIProvider == provider {
+                                Label("\(provider.title) · 已启用", systemImage: "checkmark")
+                            } else {
+                                Label("\(provider.title) · 登录并使用", systemImage: provider.systemImage)
+                            }
+                        }
+                    }
+                    if store.webAIEnabled {
+                        Button {
+                            store.disableWebAI()
+                        } label: {
+                            Label("停用网页 AI，切回 API", systemImage: "arrow.uturn.backward")
+                        }
+                    }
+                }
+                Divider()
+                Section("API 模型") {
                 if store.onlineModelChoices.isEmpty {
                     Text("尚未读取可用模型")
                 } else {
@@ -217,6 +241,7 @@ struct ComposerView: View {
                         }
                     }
                 }
+                }
                 Divider()
                 Button {
                     store.refreshOnlineModelCatalog()
@@ -231,7 +256,10 @@ struct ComposerView: View {
                     Label("配置 AI 服务…", systemImage: "gearshape")
                 }
             } label: {
-                Label(store.selectedOnlineModelLabel, systemImage: "cpu.fill")
+                Label(
+                    store.selectedAIControllerLabel,
+                    systemImage: store.webAIEnabled ? "globe" : "cpu.fill"
+                )
                     .lineLimit(1)
                     .frame(maxWidth: 260)
             }
@@ -243,6 +271,7 @@ struct ComposerView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .disabled(store.webAIEnabled || store.isProcessing)
             .frame(width: 250)
             .disabled(store.isProcessing)
             .help("自动不发送额外参数；快速、标准、深入会请求相应推理深度。不支持该参数的兼容接口会自动回退。")

@@ -2443,6 +2443,29 @@ struct OfflineRewritePipelineTests {
         #expect(second.history.first?.output.effectiveVisualStyle == .clayStopMotion)
     }
 
+    @Test("AI 控制器明确显示网页 AI 并可切回 API 模型")
+    @MainActor
+    func aiControllerReflectsWebAIChannel() throws {
+        let suite = "AIControllerWebAI-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let historyURL = FileManager.default.temporaryDirectory
+            .appending(path: "chenggao-controller-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: historyURL) }
+        let store = RewriteStore(
+            pipeline: StubPipeline(), extractor: StubExtractor(),
+            defaults: defaults, historyURL: historyURL
+        )
+
+        store.finishWebAILogin(.qwen, authenticated: true, ready: true)
+        #expect(store.selectedAIControllerLabel == "千问 · 网页 AI")
+        #expect(store.selectedAIControllerProviderLabel == "网页 AI")
+
+        store.selectOnlineModelForProcessing("gpt-test")
+        #expect(!store.webAIEnabled)
+        #expect(store.selectedAIControllerLabel == "gpt-test")
+    }
+
     @Test("编辑后的成稿标题和正文会写回历史")
     @MainActor
     func editedDraftPersists() async throws {

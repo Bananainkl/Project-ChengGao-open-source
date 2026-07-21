@@ -923,9 +923,23 @@ final class RewriteStore {
         return model.isEmpty ? "先配置模型" : model
     }
 
+    var selectedAIControllerLabel: String {
+        webAIEnabled ? "\(webAIProvider.title) · 网页 AI" : selectedOnlineModelLabel
+    }
+
+    var selectedAIControllerProviderLabel: String {
+        webAIEnabled ? "网页 AI" : onlineProvider.displayName
+    }
+
+    func chooseWebAIFromController(_ provider: WebAIProvider) {
+        selectedSection = .onlineAI
+        beginWebAILogin(provider)
+    }
+
     func selectOnlineModelForProcessing(_ model: String) {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { return }
+        if webAIEnabled { disableWebAI() }
         onlineModelDraft = trimmedModel
         let configuration = currentOnlineConfiguration
         if configuration.isValid {

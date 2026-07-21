@@ -15,7 +15,7 @@
   <img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-2563eb">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-native-f05138?logo=swift&logoColor=white">
   <img alt="macOS 26" src="https://img.shields.io/badge/macOS-26-111827?logo=apple">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-163_passing-22c55e">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-164_passing-22c55e">
   <img alt="GitHub stars" src="https://img.shields.io/github/stars/Bananainkl/Project-ChengGao-open-source?style=flat">
 </p>
 
@@ -48,7 +48,7 @@ It combines local Whisper transcription, embedded local language models, and opt
   <img src="docs/images/product-screenshot.png" alt="澄稿原生 macOS 文稿工作台" width="85%">
 </p>
 
-当前版本：`1.21.4 (62)`。公开版本由根目录 `VERSION` 管理，内部构建号由
+当前版本：`1.21.5 (63)`。公开版本由根目录 `VERSION` 管理，内部构建号由
 `BUILD_NUMBER` 管理；每次功能更新必须先递增二者，再重新生成安装包。
 
 一个面向 macOS 26 的内容提取与改写应用。目标是在 Apple Silicon Mac 上完成网页读取、
