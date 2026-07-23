@@ -1103,11 +1103,15 @@ final class RewriteStore {
                 onlineAIStatus = "接口与模型已保存；还需要填写 API Key"
                 return
             }
-            onlineAIStatus = "配置已保存到\(storage.map { "\($0.label)" } ?? "本机")；建议立即测试连接"
+            onlineAIStatus = Self.savedOnlineAIStatus(storageLabel: storage?.label)
             modelMode = .onlinePreferred
         } catch {
             onlineAIStatus = error.localizedDescription
         }
+    }
+
+    nonisolated static func savedOnlineAIStatus(storageLabel: String?) -> String {
+        "改写 API 配置与 Key 已保存到\(storageLabel ?? "本机")；建议立即测试连接"
     }
 
     func saveAndTestOnlineAIConfiguration() {

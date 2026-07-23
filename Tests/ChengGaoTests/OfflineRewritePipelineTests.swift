@@ -1502,6 +1502,14 @@ struct OfflineRewritePipelineTests {
         #expect(!OnlineAIProvider.custom.acceptsAPIKey("key with spaces 123456"))
     }
 
+    @Test("Rewrite API save gives explicit key feedback")
+    func rewriteAPISaveGivesExplicitKeyFeedback() {
+        #expect(
+            RewriteStore.savedOnlineAIStatus(storageLabel: "macOS Keychain")
+                == "改写 API 配置与 Key 已保存到macOS Keychain；建议立即测试连接"
+        )
+    }
+
     @Test("Model catalog endpoint follows an OpenAI-compatible chat endpoint")
     func onlineModelCatalogEndpoint() {
         #expect(OnlineAIConfiguration(

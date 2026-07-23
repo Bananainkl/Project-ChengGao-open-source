@@ -126,9 +126,35 @@ struct SettingsView: View {
                         Button("删除当前 Key", role: .destructive, action: store.deleteOnlineAIKey)
                     }
                 }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("保存改写 API")
+                        .font(.headline)
+                    HStack {
+                        Button("保存并测试改写 API", action: store.saveAndTestOnlineAIConfiguration)
+                            .buttonStyle(.borderedProminent)
+                            .disabled(store.isTestingOnlineAI)
+                        Button("仅保存改写 API", action: store.saveOnlineAIConfiguration)
+                            .disabled(store.isTestingOnlineAI)
+                        Button("重新测试", action: store.testOnlineAIConnection)
+                            .disabled(store.isTestingOnlineAI)
+                        if store.isTestingOnlineAI { ProgressView().controlSize(.small) }
+                    }
+                    if !store.onlineAIStatus.isEmpty {
+                        Label(store.onlineAIStatus, systemImage: onlineStatusImage)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(onlineStatusColor)
+                            .accessibilityLabel("改写 API 保存状态：\(store.onlineAIStatus)")
+                    }
+                    Text("保存后会在这里明确显示结果；“保存并测试”还会检查当前接口是否可用。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            Section("图片生成（可选）") {
+            Section("图片生成（可选，独立设置）") {
                 TextField(
                     "图片 API 地址；留空则从聊天接口自动推导",
                     text: $store.onlineImageEndpointDraft
@@ -210,26 +236,6 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 Text("图片 Key 与聊天 Key 分开保存、互不覆盖；读取图片模型和实际生图只使用图片 Key。兼容中转站返回 image_url、url 或 b64_json；只有读取模型或在处理结果页点击生成时才会调用图片接口，并可能产生费用。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("保存与诊断") {
-                HStack {
-                    Button("保存并测试连接", action: store.saveAndTestOnlineAIConfiguration)
-                        .buttonStyle(.borderedProminent)
-                        .disabled(store.isTestingOnlineAI)
-                    Button("仅保存", action: store.saveOnlineAIConfiguration)
-                        .disabled(store.isTestingOnlineAI)
-                    Button("重新测试", action: store.testOnlineAIConnection)
-                        .disabled(store.isTestingOnlineAI)
-                    if store.isTestingOnlineAI { ProgressView().controlSize(.small) }
-                    Spacer()
-                    Label(store.onlineAIStatus, systemImage: onlineStatusImage)
-                        .font(.caption)
-                        .foregroundStyle(onlineStatusColor)
-                }
-                Text("保存并测试后会明确显示连接成功或具体错误；测试只发送一条不含原稿的 OK 消息。正式处理会把完整标题、全文和编辑指令一次性交给所选在线 AI；请求失败时会直接显示错误。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
