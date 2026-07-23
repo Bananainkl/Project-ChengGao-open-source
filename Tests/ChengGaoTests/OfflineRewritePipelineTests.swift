@@ -2003,7 +2003,7 @@ struct OfflineRewritePipelineTests {
         ).isEmpty)
     }
 
-    @Test("Plans one short-video visual every three to five seconds")
+    @Test("Plans one short-video visual every two to three seconds")
     func shortVideoShotCadence() {
         let output = RewriteOutput(
             title: "历史口播",
@@ -2015,12 +2015,12 @@ struct OfflineRewritePipelineTests {
             notes: "",
             transcriptOrigin: .platformSubtitle,
             style: .spoken,
-            durationSeconds: 40
+            durationSeconds: 47
         )
         let shots = VisualShotPlanner.shots(for: output)
-        #expect(shots.count == 10)
-        #expect(shots.first?.timecode == "00:00–00:04")
-        #expect(shots.last?.timecode == "00:36–00:40")
+        #expect(shots.count == 19)
+        #expect(shots.first?.timecode == "00:00–00:02")
+        #expect(shots.last?.timecode == "00:45–00:47")
         #expect(shots.allSatisfy { $0.prompt.contains("9:16 竖版") })
         #expect(shots.allSatisfy { !$0.spokenContext.isEmpty })
     }
@@ -3339,7 +3339,7 @@ struct OfflineRewritePipelineTests {
         }
         let spoken = VisualShotPlanner.plannedShots(for: output(style: .spoken))
         let channel = VisualShotPlanner.plannedShots(for: output(style: .channel))
-        #expect(spoken.count == 15)
+        #expect(spoken.count == 24)
         #expect(channel.count == 10)
     }
 

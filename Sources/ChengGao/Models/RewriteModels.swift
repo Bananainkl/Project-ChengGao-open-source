@@ -358,7 +358,7 @@ enum VisualShotPlanner {
 
         let spokenCharacters = cleanText.filter { !$0.isWhitespace }.count
         let duration = max(3, output.durationSeconds ?? Int(ceil(Double(spokenCharacters) / 4.5)))
-        let targetInterval = output.style == .channel ? 6.0 : 4.0
+        let targetInterval = output.style == .channel ? 6.0 : 2.5
         let shotCount = max(1, Int((Double(duration) / targetInterval).rounded()))
         let contexts = splitContexts(cleanText, count: shotCount)
         let interval = Double(duration) / Double(shotCount)
@@ -541,7 +541,7 @@ enum VisualPromptDesigner {
         case .spoken, .channel: "9:16 竖版"
         }
         let visualBrief = switch style {
-        case .spoken: "为短视频制作节奏鲜明、每 3–5 秒有明确信息点的竖屏分镜。"
+        case .spoken: "为短视频制作节奏鲜明、每 2–3 秒有明确信息点的竖屏分镜。"
         case .channel: "为视频号制作更稳健、信息完整、镜头停留稍长的竖屏画面。"
         case .article: "为公众号文章制作克制、可信、服务于段落论证的横版编辑配图。"
         case .social: "为小红书图文制作信息密度高、每张各有主题、可组成完整组图的 3:4 竖版画面。"
