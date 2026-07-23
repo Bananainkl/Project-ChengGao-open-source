@@ -1345,6 +1345,8 @@ final class RewriteStore {
             value = "\(revisedHeading(for: output))\n\n\(output.subtitleReadyBody)"
         case .visuals:
             value = visualsText(for: output)
+        case .videos:
+            value = videosText(for: output)
         }
         copyToPasteboard(value)
     }
@@ -1467,6 +1469,9 @@ final class RewriteStore {
 
         第四部分：配图建议
         \(visuals)
+
+        第五部分：视频建议
+        \(videosText(for: output))
         """
     }
 
@@ -1485,6 +1490,12 @@ final class RewriteStore {
             "镜头 \(index + 1)\n时间：\(shot.timecode)\n对应口播：\(shot.spokenContext)\nAI 绘图提示词：\(shot.prompt)"
         }.joined(separator: "\n\n")
         return [covers, shots].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    private func videosText(for output: RewriteOutput) -> String {
+        VideoSuggestionPlanner.suggestions(for: output).map { suggestion in
+            "视频 \(suggestion.id + 1)\n时间：\(suggestion.timecode)\n时长：\(suggestion.durationSeconds) 秒\n对应口播：\(suggestion.spokenContext)\n视频提示词：\(suggestion.prompt)"
+        }.joined(separator: "\n\n")
     }
 
     private func originalHeading(for output: RewriteOutput) -> String {

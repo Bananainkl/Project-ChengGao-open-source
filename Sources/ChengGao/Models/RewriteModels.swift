@@ -180,6 +180,7 @@ enum OutputPage: Int, CaseIterable, Identifiable {
     case suggestions
     case revised
     case visuals
+    case videos
 
     var id: Self { self }
 
@@ -189,6 +190,7 @@ enum OutputPage: Int, CaseIterable, Identifiable {
         case .suggestions: "2 修改建议"
         case .revised: "3 修改稿"
         case .visuals: "4 配图建议"
+        case .videos: "5 视频建议"
         }
     }
 }

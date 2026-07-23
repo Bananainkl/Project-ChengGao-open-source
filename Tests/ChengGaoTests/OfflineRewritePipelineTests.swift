@@ -2025,6 +2025,33 @@ struct OfflineRewritePipelineTests {
         #expect(shots.allSatisfy { !$0.spokenContext.isEmpty })
     }
 
+    @Test("Plans one continuous video prompt for every ten seconds")
+    func videoSuggestionCadenceAndContinuity() {
+        let output = RewriteOutput(
+            title: "47 秒口播",
+            rawTranscript: "原稿",
+            originalTranscript: "原稿",
+            corrections: [],
+            suggestions: [],
+            revisedBody: String(repeating: "账号流量需要逐项检查内容质量和用户反馈。", count: 12),
+            notes: "",
+            transcriptOrigin: .platformSubtitle,
+            style: .spoken,
+            visualStyle: .clayStopMotion,
+            durationSeconds: 47
+        )
+        let suggestions = VideoSuggestionPlanner.suggestions(for: output)
+        #expect(suggestions.count == 5)
+        #expect(suggestions.first?.timecode == "00:00–00:10")
+        #expect(suggestions.last?.timecode == "00:40–00:47")
+        #expect(suggestions.last?.durationSeconds == 7)
+        #expect(suggestions.allSatisfy { $0.prompt.contains("9:16 竖版") })
+        #expect(suggestions.allSatisfy { $0.prompt.contains("全片连续性设定") })
+        #expect(suggestions.allSatisfy { $0.prompt.contains("粘土") })
+        #expect(suggestions[1].prompt.contains("严格承接上一段末帧"))
+        #expect(suggestions[0].prompt.contains("固定视觉基准"))
+    }
+
     @Test("画面风格预设使用可执行的材质描述而不是受保护作品名称")
     func visualStylePresetsAreConcreteAndBrandNeutral() {
         #expect(VisualStyle.allCases.count == 9)

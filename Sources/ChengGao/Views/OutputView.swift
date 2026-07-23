@@ -57,7 +57,7 @@ struct OutputView: View {
                         Label("复制本页", systemImage: "doc.on.doc")
                     }
                     Menu {
-                        Button("复制全部四部分") {
+                        Button("复制全部五部分") {
                             copyAllAction()
                             showCopyFeedback("已复制全部")
                         }
@@ -66,7 +66,7 @@ struct OutputView: View {
                     }
                     .menuStyle(.borderlessButton)
                     .accessibilityLabel("更多复制选项")
-                    .help("复制全部四部分")
+                    .help("复制全部五部分")
                 }
             }
 
@@ -104,7 +104,7 @@ struct OutputView: View {
                     movePage(by: 1)
                 }
                 .labelStyle(.titleAndIcon)
-                .disabled(selectedPage == .visuals)
+                .disabled(selectedPage == .videos)
             }
         }
         .padding(22)
@@ -386,6 +386,51 @@ struct OutputView: View {
                 }
             }
             .transition(.opacity)
+
+        case .videos:
+            resultSection(
+                number: "05",
+                title: "视频建议",
+                subtitle: "每 10 秒一段 · 连贯叙事 · 风格统一 · 共 \(videoSuggestions.count) 段"
+            ) {
+                LazyVStack(spacing: 12) {
+                    ForEach(videoSuggestions) { suggestion in
+                        HStack(alignment: .top, spacing: 14) {
+                            Text("\(suggestion.id + 1)")
+                                .font(.caption.monospacedDigit().weight(.bold))
+                                .foregroundStyle(.tint)
+                                .frame(width: 28, height: 28)
+                                .background(.tint.opacity(0.1), in: .circle)
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Label(
+                                        "\(suggestion.timecode) · \(suggestion.durationSeconds) 秒",
+                                        systemImage: "video"
+                                    )
+                                    .font(.headline)
+                                    Spacer()
+                                    Button("复制提示词", systemImage: "doc.on.doc") {
+                                        copyImagePromptAction(suggestion.prompt)
+                                        showCopyFeedback("已复制视频提示词")
+                                    }
+                                    .controlSize(.small)
+                                }
+                                Text(suggestion.prompt)
+                                    .foregroundStyle(.secondary)
+                                    .lineSpacing(4)
+                                    .textSelection(.enabled)
+                                Text("对应口播：\(suggestion.spokenContext)")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(16)
+                        .workspaceGlassInset(cornerRadius: 16)
+                    }
+                }
+            }
+            .transition(.opacity)
         }
     }
 
@@ -518,10 +563,14 @@ struct OutputView: View {
         CoverArtworkPlanner.artworks(for: output)
     }
 
+    private var videoSuggestions: [VideoSuggestion] {
+        VideoSuggestionPlanner.suggestions(for: output)
+    }
+
     private var visualSubtitle: String {
         let source = output.visualDesignSource?.label ?? "旧版基础镜头"
         if output.style == .spoken || output.style == .channel {
-            return "\(output.effectiveVisualStyle.rawValue) · \(source) · 每 3–5 秒一镜 · 共 \(visualShots.count) 镜"
+            return "\(output.effectiveVisualStyle.rawValue) · \(source) · 每 2–3 秒一镜 · 共 \(visualShots.count) 镜"
         }
         return "\(output.effectiveVisualStyle.rawValue) · \(source) · 共 \(visualShots.count) 张 · 可直接复制给图像 AI"
     }
