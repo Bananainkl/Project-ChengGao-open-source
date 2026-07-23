@@ -26,17 +26,25 @@ enum VideoSuggestionPlanner {
             let start = index * 10
             let end = min(duration, start + 10)
             let segmentDuration = max(1, end - start)
+            let openingEnd = min(2, max(1, segmentDuration / 3))
+            let developmentEnd = max(openingEnd, segmentDuration - min(2, segmentDuration / 3))
+            let beats = actionBeats(from: contexts[index])
             let transition = index == 0
-                ? "本段负责建立核心主体、环境方位和运动方向，为后续片段固定视觉基准。"
-                : "首帧严格承接上一段末帧，保持主体位置、朝向、动作趋势、环境陈设和光线连续，不跳轴、不瞬移、不更换人物造型。"
+                ? "首帧直接从动作发生前一刻开始，同时建立核心主体、环境方位和运动方向。"
+                : "首帧就是上一段末帧的下一瞬间，主体位置、朝向、速度、动作惯性、环境陈设和光线完全连续。"
             let ending = index == count - 1
-                ? "结尾完成动作并形成明确收束。"
-                : "末帧保留清楚的动作趋势和构图锚点，供下一段无缝续接。"
+                ? "最后 2 秒让动作自然完成，人物呼吸、表情和衣物仍有细微运动，形成有生命力的收束。"
+                : "最后 2 秒不要停住：主体继续向同一方向运动，末帧保留未完成动作、视线目标和镜头速度，让下一段可以无缝续接。"
             let prompt = """
-            生成一段 \(segmentDuration) 秒、9:16 竖版的连续短视频。对应口播：『\(contexts[index])』。\
-            \(continuity)统一视觉风格：\(style) \
-            \(transition)将口播信息转化为一个连续可见的动作过程，明确主体动作、环境变化、镜头景别、机位运动和节奏；动作自然，物理关系稳定，画面内不要突然新增或消失人物与物件。\
-            \(ending)不要文字、字幕、数字标注、二维码、水印、品牌标志或界面元素。
+            生成一段 \(segmentDuration) 秒、9:16 竖版、单一连续长镜头的动态短视频。对应口播：『\(contexts[index])』。\
+            \(continuity)统一视觉风格：\(style) \(transition)
+
+            动作时间轴：
+            0–\(openingEnd) 秒：画面一开始主体就已经在行动，用明确的走动、转身、俯身、伸手、拿取、推动或交互动作呈现“\(beats[0])”；身体重心、手臂、视线、表情和衣物必须同步变化，禁止站着不动展示画面。
+            \(openingEnd)–\(developmentEnd) 秒：不切镜，沿同一动作因果继续完成至少两个连续步骤，用“先发生 → 引起变化 → 主体立即回应”的过程呈现“\(beats[1])”；道具发生真实位移，头发、衣摆、灰尘、蒸汽、树叶或环境光影至少有一种持续动态反馈。
+            \(developmentEnd)–\(segmentDuration) 秒：在运动中呈现“\(beats[2])”。\(ending)
+
+            摄影机从开场构图持续跟随主体，先轻微前移，再沿动作方向平滑侧移或环绕，景别随动作自然收紧；全段只允许一次连续运镜，禁止切换机位、跳切、转场、定格、静态摆拍、幻灯片式推拉或只让镜头动而人物不动。动作速度自然，重力、惯性和物体接触可信；不得瞬移、变脸、换装、肢体变形或让人物与物件突然出现消失。不要文字、字幕、数字标注、二维码、水印、品牌标志或界面元素。
             """
             return VideoSuggestion(
                 id: index,
@@ -45,6 +53,19 @@ enum VideoSuggestionPlanner {
                 spokenContext: contexts[index],
                 prompt: prompt
             )
+        }
+    }
+
+    private static func actionBeats(from context: String) -> [String] {
+        let parts = context
+            .split(whereSeparator: { "，。！？；、,!?;".contains($0) })
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return [context, context, context] }
+        return (0..<3).map { index in
+            let lower = index * parts.count / 3
+            let upper = max(lower + 1, (index + 1) * parts.count / 3)
+            return parts[lower..<min(upper, parts.count)].joined(separator: "，")
         }
     }
 

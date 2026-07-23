@@ -2048,8 +2048,13 @@ struct OfflineRewritePipelineTests {
         #expect(suggestions.allSatisfy { $0.prompt.contains("9:16 竖版") })
         #expect(suggestions.allSatisfy { $0.prompt.contains("全片连续性设定") })
         #expect(suggestions.allSatisfy { $0.prompt.contains("粘土") })
-        #expect(suggestions[1].prompt.contains("严格承接上一段末帧"))
-        #expect(suggestions[0].prompt.contains("固定视觉基准"))
+        #expect(suggestions.allSatisfy { $0.prompt.contains("动作时间轴") })
+        #expect(suggestions.allSatisfy { $0.prompt.contains("至少两个连续步骤") })
+        #expect(suggestions.allSatisfy { $0.prompt.contains("单一连续长镜头") })
+        #expect(suggestions.allSatisfy { $0.prompt.contains("禁止切换机位") })
+        #expect(suggestions.allSatisfy { $0.prompt.contains("禁止站着不动") })
+        #expect(suggestions[1].prompt.contains("上一段末帧的下一瞬间"))
+        #expect(suggestions[0].prompt.contains("动作发生前一刻"))
     }
 
     @Test("画面风格预设使用可执行的材质描述而不是受保护作品名称")
