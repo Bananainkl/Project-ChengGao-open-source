@@ -275,7 +275,7 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
     ) async throws -> RewriteOutput {
         let configuration = client.resolvedConfiguration()
         let reasoningEffort = client.resolvedReasoningEffort()
-        progress(RewriteProgress(completed: 0, total: 2, message: "正在通过 \(configuration.provider.displayName) · \(reasoningEffort.displayName)推理通读全文并改写…"))
+        progress(RewriteProgress(completed: 0, total: 3, message: "正在通过 \(configuration.provider.displayName) · \(reasoningEffort.displayName)推理通读全文并改写…"))
         var completion = try await client.complete(
             prompt: Self.prompt(material: material, style: style, language: language),
             systemInstruction: Self.rewriteSystemInstruction
@@ -293,7 +293,7 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
             style: style
         )
         if !issues.isEmpty {
-            progress(RewriteProgress(completed: 1, total: 2, message: "在线初稿未通过质量检查，正在重新统稿…"))
+            progress(RewriteProgress(completed: 1, total: 3, message: "在线初稿未通过质量检查，正在重新统稿…"))
             completion = try await client.complete(
                 prompt: Self.retryPrompt(
                     material: material,
@@ -317,8 +317,32 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
                 style: style
             )
         }
+        if Self.shouldAttemptFactualRepair(issues) {
+            progress(RewriteProgress(completed: 2, total: 3, message: "正在补齐第二稿遗漏的事实信息…"))
+            completion = try await client.complete(
+                prompt: Self.factualRepairPrompt(
+                    material: material,
+                    style: style,
+                    language: language,
+                    draft: draft.revised
+                ),
+                systemInstruction: Self.rewriteSystemInstruction
+            )
+            draft = try Self.parseDraft(
+                completion.content,
+                material: material,
+                style: style,
+                language: language
+            )
+            issues = EmbeddedModelRuntime.documentQualityIssues(
+                original: material.transcript,
+                revised: draft.revised,
+                sourceOrigin: material.origin,
+                style: style
+            )
+        }
         guard issues.isEmpty else { throw OpenRouterError.draftQualityRejected(issues) }
-        progress(RewriteProgress(completed: 2, total: 2, message: "在线全文审稿完成"))
+        progress(RewriteProgress(completed: 3, total: 3, message: "在线全文审稿完成"))
         return RewriteOutput(
             title: language.normalize(draft.title ?? EmbeddedModelRuntime.outputTitle(for: material, revisedBody: draft.revised)),
             rawTranscript: material.transcript,
@@ -412,6 +436,36 @@ actor OpenRouterRewritePipeline: RewriteProcessing {
 
         未通过的上一版：
         \(firstDraft)
+        """
+    }
+
+    nonisolated static func shouldAttemptFactualRepair(_ issues: [String]) -> Bool {
+        issues == ["日期、数字、信源或关键名词保留不足"]
+    }
+
+    nonisolated static func factualRepairPrompt(
+        material: SourceMaterial,
+        style: RewriteStyle,
+        language: OutputLanguage,
+        draft: String
+    ) -> String {
+        let missingAnchors = EmbeddedModelRuntime.missingFactualAnchors(
+            original: material.transcript,
+            revised: draft,
+            sourceOrigin: material.origin
+        )
+        return """
+        这份“\(style.rawValue)”已经通过其他质量检查，现在只修复事实遗漏，不要推倒重写。
+        必须逐项核对并准确补回以下事实锚点：\(missingAnchors.prefix(24).joined(separator: "、"))。
+        把锚点连同原稿中的语境自然写入 revised，不得只罗列词语，不得删除现有事实、改变数字或虚构解释。
+        \(language.promptInstruction)
+        只返回与上一请求相同字段的 JSON 对象，revised 必须是补齐后的完整成稿。
+
+        完整原稿：
+        \(material.transcript)
+
+        待修复的第二稿：
+        \(draft)
         """
     }
 

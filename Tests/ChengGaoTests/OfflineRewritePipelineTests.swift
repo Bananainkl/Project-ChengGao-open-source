@@ -1495,6 +1495,31 @@ struct OfflineRewritePipelineTests {
         #expect(prompt.contains("以本条为准"))
     }
 
+    @Test("A factual-only second-draft failure receives one focused repair pass")
+    func factualOnlyFailureReceivesFocusedRepair() {
+        let material = SourceMaterial(
+            title: "调查",
+            transcript: "2026年10月1日，新华社称共有120人参与，完成率达到35%。",
+            origin: .localSpeechRecognition,
+            durationSeconds: 18
+        )
+        let draft = "新华社介绍了这项调查，但没有公布日期、人数和完成率。"
+        let issue = "日期、数字、信源或关键名词保留不足"
+        #expect(OpenRouterRewritePipeline.shouldAttemptFactualRepair([issue]))
+        #expect(!OpenRouterRewritePipeline.shouldAttemptFactualRepair([issue, "成稿过度缩短"]))
+        let prompt = OpenRouterRewritePipeline.factualRepairPrompt(
+            material: material,
+            style: .spoken,
+            language: .simplifiedChinese,
+            draft: draft
+        )
+        #expect(prompt.contains("只修复事实遗漏，不要推倒重写"))
+        #expect(prompt.contains("2026年"))
+        #expect(prompt.contains("120人"))
+        #expect(prompt.contains("35%"))
+        #expect(prompt.contains("待修复的第二稿"))
+    }
+
     @Test("Custom compatible provider rejects incomplete pasted credentials")
     func onlineCredentialFormatValidation() {
         #expect(OnlineAIProvider.custom.acceptsAPIKey("example-compatible-key"))
