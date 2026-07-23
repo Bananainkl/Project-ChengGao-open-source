@@ -624,7 +624,7 @@ struct OfflineRewritePipelineTests {
         #expect(relay.absoluteString == "https://relay.example.com/openai/v1/models")
     }
 
-    @Test("Image request uses the selected relay model, aspect ratio and quality")
+    @Test("Article image request uses the selected relay model, landscape size and quality")
     func compatibleImageRequestShape() {
         let configuration = OnlineImageGenerationConfiguration(
             provider: .custom,
@@ -642,6 +642,25 @@ struct OfflineRewritePipelineTests {
         #expect(body["size"] as? String == "1536x1024")
         #expect(body["quality"] as? String == "high")
         #expect(body["response_format"] as? String == "url")
+        #expect(body["aspect_ratio"] == nil)
+    }
+
+    @Test("Short-video image request uses the native 9:16 aspect-ratio parameter")
+    func compatiblePortraitImageRequestShape() {
+        let configuration = OnlineImageGenerationConfiguration(
+            provider: .custom,
+            endpoint: "",
+            model: "gpt-image-2",
+            size: .automatic,
+            quality: .automatic
+        )
+        let body = CompatibleImageGenerationClient.requestBody(
+            prompt: "9:16 竖版短视频分镜",
+            style: .spoken,
+            configuration: configuration
+        )
+        #expect(body["size"] as? String == "auto")
+        #expect(body["aspect_ratio"] as? String == "9:16")
     }
 
     @Test("Compatible image client reads relay image_url and downloads the image")

@@ -84,6 +84,9 @@ struct CompatibleImageGenerationClient: ImageGenerating, Sendable {
         if let quality = configuration.quality.apiValue {
             body["quality"] = quality
         }
+        if let aspectRatio = configuration.size.aspectRatioAPIValue(for: style) {
+            body["aspect_ratio"] = aspectRatio
+        }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -179,6 +182,9 @@ struct CompatibleImageGenerationClient: ImageGenerating, Sendable {
         ]
         if let quality = configuration.quality.apiValue {
             body["quality"] = quality
+        }
+        if let aspectRatio = configuration.size.aspectRatioAPIValue(for: style) {
+            body["aspect_ratio"] = aspectRatio
         }
         return body
     }

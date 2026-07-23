@@ -56,7 +56,7 @@ enum OnlineImageGenerationSize: String, CaseIterable, Identifiable, Codable, Sen
         switch self {
         case .automatic: "跟随内容比例"
         case .square: "1:1 方图"
-        case .portrait: "竖图"
+        case .portrait: "9:16 竖图"
         case .landscape: "横图"
         }
     }
@@ -64,10 +64,21 @@ enum OnlineImageGenerationSize: String, CaseIterable, Identifiable, Codable, Sen
     func apiValue(for style: RewriteStyle) -> String {
         switch self {
         case .square: "1024x1024"
-        case .portrait: "1024x1536"
+        case .portrait: "auto"
         case .landscape: "1536x1024"
         case .automatic:
-            style == .article ? "1536x1024" : "1024x1536"
+            style == .article ? "1536x1024" : "auto"
+        }
+    }
+
+    func aspectRatioAPIValue(for style: RewriteStyle) -> String? {
+        switch self {
+        case .portrait:
+            "9:16"
+        case .automatic:
+            style == .article ? nil : "9:16"
+        case .square, .landscape:
+            nil
         }
     }
 }
