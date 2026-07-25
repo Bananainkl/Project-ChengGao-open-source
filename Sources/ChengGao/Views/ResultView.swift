@@ -1,7 +1,9 @@
+import AppKit
 import SwiftUI
 
 struct ResultView: View {
     @Bindable var store: RewriteStore
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: WorkspaceLayout.headerContentSpacing) {
@@ -20,7 +22,7 @@ struct ResultView: View {
                     }
                 }
                 .padding(12)
-                .workspaceGlassPanel(cornerRadius: 14)
+                .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusSmall)
             }
 
             if let output = store.latestResultOutput {
@@ -42,23 +44,27 @@ struct ResultView: View {
 
                     OutputView(
                         output: output,
-                        copyPageAction: { store.copyOutputPage($0, output: output) },
-                        copyAllAction: { store.copyOutput(output) },
-                        copyImagePromptAction: store.copyImagePrompt,
-                        exportImageMarkdownAction: { store.exportChatGPTImageMarkdown(output) },
-                        exportPackageAction: { store.exportShortVideoPackage(output) },
-                        saveDraftAction: { store.saveEditedDraft(title: $0, revisedBody: $1) },
+                        actions: OutputViewActions(
+                            copyPage: { store.copyOutputPage($0, output: output) },
+                            copyAll: { store.copyOutput(output) },
+                            copyImagePrompt: store.copyImagePrompt,
+                            exportImageMarkdown: { store.exportChatGPTImageMarkdown(output) },
+                            exportPackage: { store.exportShortVideoPackage(output) },
+                            saveDraft: { store.saveEditedDraft(title: $0, revisedBody: $1) },
+                            generateImage: { store.generateImage(for: $0, in: output) },
+                            generateCover: { store.generateCover($0, in: output) },
+                            generateAllImages: { store.generateAllImages(in: output) },
+                            cancelImageGeneration: store.cancelImageGeneration,
+                            openGeneratedImage: store.openGeneratedImage,
+                            revealGeneratedImage: store.revealGeneratedImage
+                        ),
+                        imageState: ImageGenerationState(
+                            shotID: store.generatingImageShotID,
+                            coverFormat: store.generatingCoverFormat,
+                            isGeneratingAll: store.isGeneratingAllImages
+                        ),
                         canGenerateImages: store.canGenerateImages,
-                        imageGenerationStatus: store.onlineImageGenerationStatus,
-                        generatingImageShotID: store.generatingImageShotID,
-                        generatingCoverFormat: store.generatingCoverFormat,
-                        isGeneratingAllImages: store.isGeneratingAllImages,
-                        generateImageAction: { store.generateImage(for: $0, in: output) },
-                        generateCoverAction: { store.generateCover($0, in: output) },
-                        generateAllImagesAction: { store.generateAllImages(in: output) },
-                        cancelImageGenerationAction: store.cancelImageGeneration,
-                        openGeneratedImageAction: store.openGeneratedImage,
-                        revealGeneratedImageAction: store.revealGeneratedImage
+                        imageGenerationStatus: store.onlineImageGenerationStatus
                     )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -66,15 +72,19 @@ struct ResultView: View {
                 ContentUnavailableView {
                     Label("还没有处理结果", systemImage: "doc.text.magnifyingglass")
                 } description: {
-                    Text("请先在“新建文稿”中提交素材。处理完成后，成稿会自动保存到这里。")
+                    Text("前往「新建文稿」粘贴文本或输入链接，开始 AI 改写。处理完成后，成稿会自动保存到这里。")
                 } actions: {
                     Button("前往新建文稿") {
                         store.selectedSection = .compose
                     }
                     .buttonStyle(.borderedProminent)
+                    Button("打开 AI 设置") {
+                        openSettings()
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .workspaceGlassPanel(cornerRadius: 22, elevated: true)
+                .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusLarge, elevated: true)
             }
         }
         .padding(.horizontal, WorkspaceLayout.detailHorizontalPadding)

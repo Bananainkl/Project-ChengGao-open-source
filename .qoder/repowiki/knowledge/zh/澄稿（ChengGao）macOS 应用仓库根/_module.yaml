@@ -1,0 +1,21 @@
+schema_version: 1
+module_path: ""
+title: 澄稿（ChengGao）macOS 应用仓库根
+scope:
+    - README.md
+    - CONTRIBUTING.md
+    - RELEASE_NOTES.md
+    - SECURITY.md
+    - SUPPORT.md
+    - Package.swift
+    - .gitignore
+    - AGENTS.md
+    - BUILD_NUMBER
+    - CHANGELOG.md
+    - CODE_OF_CONDUCT.md
+    - LICENSE
+    - NOTICE
+    - VERSION
+source_files: []
+depends_on: []
+related_to: []

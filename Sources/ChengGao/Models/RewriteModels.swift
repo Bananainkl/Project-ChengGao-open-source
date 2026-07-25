@@ -27,7 +27,7 @@ enum WorkspaceSection: String, CaseIterable, Identifiable {
         case .results: "doc.text.magnifyingglass"
         case .research: "chart.line.uptrend.xyaxis"
         case .onlineAI: "person.crop.circle.badge.checkmark"
-        case .accounts: "person.crop.circle.badge.checkmark"
+        case .accounts: "person.2.crop.square.stack"
         case .history: "clock"
         }
     }

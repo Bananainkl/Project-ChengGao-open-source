@@ -1,0 +1,22 @@
+schema_version: 1
+module_path: cheng_gao_app/shared_models
+title: 共享数据模型与本地推理服务
+scope:
+    - Sources/ChengGao/Models/
+    - Sources/ChengGao/Services/EmbeddedModelRuntime.swift
+    - Sources/ChengGao/Services/LocalSpeechTranscriber.swift
+    - Sources/ChengGao/Services/SpokenSubtitleFormatter.swift
+    - Sources/ChengGao/Services/TerminologyVerifier.swift
+    - Sources/ChengGao/Services/SourceExtractor.swift
+    - Sources/ChengGao/Services/VideoSuggestionPlanner.swift
+    - Sources/ChengGao/Services/CompatibleImageGenerationClient.swift
+    - Sources/ChengGao/Services/OpenRouterCredentialStore.swift
+    - Sources/ChengGao/Services/ResearchCredentialStore.swift
+    - Sources/ChengGao/Services/PlatformSessionStore.swift
+source_files: []
+depends_on: []
+related_to:
+    - path: cheng_gao_app/media_tools
+    - path: cheng_gao_app/research_domain
+    - path: cheng_gao_app/rewrite_domain
+    - path: cheng_gao_app/web_ai_domain

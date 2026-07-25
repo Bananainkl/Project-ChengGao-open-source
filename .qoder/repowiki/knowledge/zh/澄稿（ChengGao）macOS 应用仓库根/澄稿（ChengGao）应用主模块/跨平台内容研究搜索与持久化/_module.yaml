@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: cheng_gao_app/research_domain
+title: 跨平台内容研究搜索与持久化
+scope:
+    - Sources/ChengGao/Services/ResearchDatabase.swift
+    - Sources/ChengGao/Services/ResearchSearchService.swift
+    - Sources/ChengGao/Services/WebKitResearchSearchService.swift
+    - Sources/ChengGao/Stores/ResearchStore.swift
+    - Sources/ChengGao/Views/ResearchView.swift
+    - Sources/ChengGao/Views/ResearchAccountsView.swift
+source_files: []
+depends_on: []
+related_to:
+    - path: cheng_gao_app/app_shell
+    - path: cheng_gao_app/media_tools
+    - path: cheng_gao_app/shared_models

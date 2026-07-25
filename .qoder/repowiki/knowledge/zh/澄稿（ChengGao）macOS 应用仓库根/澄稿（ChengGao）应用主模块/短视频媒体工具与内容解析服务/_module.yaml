@@ -1,0 +1,17 @@
+schema_version: 1
+module_path: cheng_gao_app/media_tools
+title: 短视频媒体工具与内容解析服务
+scope:
+    - Sources/ChengGao/Services/ChatGPTImageBatchDocument.swift
+    - Sources/ChengGao/Services/CoverArtworkGenerator.swift
+    - Sources/ChengGao/Services/DouyinVideoResolver.swift
+    - Sources/ChengGao/Services/XiaohongshuContentResolver.swift
+    - Sources/ChengGao/Services/ShortVideoExportPackage.swift
+    - Sources/ChengGao/Services/VideoFrameTextExtractor.swift
+    - Sources/ChengGao/Services/VisualPromptGenerator.swift
+source_files: []
+depends_on: []
+related_to:
+    - path: cheng_gao_app/research_domain
+    - path: cheng_gao_app/rewrite_domain
+    - path: cheng_gao_app/shared_models

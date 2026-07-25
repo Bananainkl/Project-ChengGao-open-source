@@ -62,7 +62,7 @@ struct HistoryView: View {
             .scrollContentBackground(.hidden)
             .background(.clear)
         }
-        .workspaceGlassPanel(cornerRadius: 18, elevated: true)
+        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusLarge, elevated: true)
     }
 
     private func historyDetail(_ item: RewriteHistoryItem) -> some View {
@@ -74,25 +74,29 @@ struct HistoryView: View {
 
             OutputView(
                 output: item.output,
-                copyPageAction: { store.copyOutputPage($0, output: item.output) },
-                copyAllAction: { store.copyOutput(item.output) },
-                copyImagePromptAction: store.copyImagePrompt,
-                exportImageMarkdownAction: { store.exportChatGPTImageMarkdown(item.output) },
-                exportPackageAction: { store.exportShortVideoPackage(item.output) },
-                saveDraftAction: {
-                    store.saveEditedDraft(title: $0, revisedBody: $1, historyID: item.id)
-                },
+                actions: OutputViewActions(
+                    copyPage: { store.copyOutputPage($0, output: item.output) },
+                    copyAll: { store.copyOutput(item.output) },
+                    copyImagePrompt: store.copyImagePrompt,
+                    exportImageMarkdown: { store.exportChatGPTImageMarkdown(item.output) },
+                    exportPackage: { store.exportShortVideoPackage(item.output) },
+                    saveDraft: {
+                        store.saveEditedDraft(title: $0, revisedBody: $1, historyID: item.id)
+                    },
+                    generateImage: { store.generateImage(for: $0, in: item.output, historyID: item.id) },
+                    generateCover: { store.generateCover($0, in: item.output, historyID: item.id) },
+                    generateAllImages: { store.generateAllImages(in: item.output, historyID: item.id) },
+                    cancelImageGeneration: store.cancelImageGeneration,
+                    openGeneratedImage: store.openGeneratedImage,
+                    revealGeneratedImage: store.revealGeneratedImage
+                ),
+                imageState: ImageGenerationState(
+                    shotID: store.generatingImageShotID,
+                    coverFormat: store.generatingCoverFormat,
+                    isGeneratingAll: store.isGeneratingAllImages
+                ),
                 canGenerateImages: store.canGenerateImages,
-                imageGenerationStatus: store.onlineImageGenerationStatus,
-                generatingImageShotID: store.generatingImageShotID,
-                generatingCoverFormat: store.generatingCoverFormat,
-                isGeneratingAllImages: store.isGeneratingAllImages,
-                generateImageAction: { store.generateImage(for: $0, in: item.output, historyID: item.id) },
-                generateCoverAction: { store.generateCover($0, in: item.output, historyID: item.id) },
-                generateAllImagesAction: { store.generateAllImages(in: item.output, historyID: item.id) },
-                cancelImageGenerationAction: store.cancelImageGeneration,
-                openGeneratedImageAction: store.openGeneratedImage,
-                revealGeneratedImageAction: store.revealGeneratedImage
+                imageGenerationStatus: store.onlineImageGenerationStatus
             )
         }
         .frame(maxWidth: 940, maxHeight: .infinity, alignment: .leading)

@@ -5,35 +5,37 @@ struct ContentView: View {
     @Bindable var researchStore: ResearchStore
 
     var body: some View {
-        GeometryReader { _ in
-            ZStack {
-                WorkspaceAmbientBackground()
-                    .ignoresSafeArea()
+        ZStack {
+            WorkspaceAmbientBackground()
+                .ignoresSafeArea()
 
-                NavigationSplitView {
-                    SidebarView(store: store)
-                        .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
-                } detail: {
-                    Group {
-                        switch store.selectedSection {
-                        case .compose:
-                            ComposerView(store: store)
-                        case .results:
-                            ResultView(store: store)
-                        case .research:
-                            ResearchView(researchStore: researchStore, rewriteStore: store)
-                        case .onlineAI:
-                            WebAILoginView(store: store)
-                        case .accounts:
-                            ResearchAccountsView(store: researchStore)
-                        case .history:
-                            HistoryView(store: store)
-                        }
+            NavigationSplitView {
+                SidebarView(store: store)
+                    .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
+            } detail: {
+                ZStack {
+                    switch store.selectedSection {
+                    case .compose:
+                        ComposerView(store: store)
+                    case .results:
+                        ResultView(store: store)
+                    case .research:
+                        ResearchView(researchStore: researchStore, rewriteStore: store)
+                    case .onlineAI:
+                        WebAILoginView(store: store)
+                    case .accounts:
+                        ResearchAccountsView(store: researchStore)
+                    case .history:
+                        HistoryView(store: store)
                     }
                 }
-                .background(.clear)
+                .id(store.selectedSection)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
+            .animation(.snappy, value: store.selectedSection)
+            .background(.clear)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .containerBackground(.clear, for: .window)
         .background {
             WindowGlassConfigurator()
@@ -51,5 +53,4 @@ struct ContentView: View {
             )
         )
     }
-
 }

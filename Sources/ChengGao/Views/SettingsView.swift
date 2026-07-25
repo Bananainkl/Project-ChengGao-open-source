@@ -10,7 +10,7 @@ struct SettingsView: View {
             onlineAISettings
                 .tabItem { Label("AI 服务", systemImage: "network") }
         }
-        .frame(width: 720, height: 620)
+        .frame(minWidth: 620, idealWidth: 720, minHeight: 520, idealHeight: 620)
         .scenePadding()
         .containerBackground(.clear, for: .window)
         .background {
@@ -33,7 +33,7 @@ struct SettingsView: View {
             }
             Section("隐私") {
                 Label(store.privacySummary, systemImage: "lock.shield")
-                Text(privacyDetail)
+                Text(.init(privacyDetailMarkdown))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -143,9 +143,7 @@ struct SettingsView: View {
                         if store.isTestingOnlineAI { ProgressView().controlSize(.small) }
                     }
                     if !store.onlineAIStatus.isEmpty {
-                        Label(store.onlineAIStatus, systemImage: onlineStatusImage)
-                            .font(.callout.weight(.medium))
-                            .foregroundStyle(onlineStatusColor)
+                        StatusBanner(message: store.onlineAIStatus, severity: onlineStatusSeverity)
                             .accessibilityLabel("改写 API 保存状态：\(store.onlineAIStatus)")
                     }
                     Text("保存后会在这里明确显示结果；“保存并测试”还会检查当前接口是否可用。")
@@ -251,19 +249,15 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
     }
 
-    private var onlineStatusImage: String {
-        if store.onlineAIStatus.contains("成功") { return "checkmark.circle.fill" }
-        if store.onlineAIStatus.contains("失败") || store.onlineAIStatus.contains("错误") || store.onlineAIStatus.contains("不正确") { return "xmark.octagon.fill" }
-        return store.hasOnlineAPIKey ? "checkmark.shield.fill" : "key"
+    private var onlineStatusSeverity: StatusBanner.Severity {
+        if store.onlineAIStatus.contains("成功") { return .success }
+        if store.onlineAIStatus.contains("失败") || store.onlineAIStatus.contains("错误") || store.onlineAIStatus.contains("不正确") { return .error }
+        return .info
     }
 
-    private var onlineStatusColor: Color {
-        if store.onlineAIStatus.contains("成功") { return .green }
-        if store.onlineAIStatus.contains("失败") || store.onlineAIStatus.contains("错误") || store.onlineAIStatus.contains("不正确") { return .red }
-        return .secondary
-    }
-
-    private var privacyDetail: String {
-        "完整标题、原稿和改写提示会发送给 \(store.onlineProvider.displayName)。视频音轨仍只在本机使用 Whisper 转写，不上传原始音频。"
+    private var privacyDetailMarkdown: String {
+        "完整标题、原稿和改写提示会发送给 \(store.onlineProvider.displayName)。\n\n" +
+        "本应用**不会**将您的文稿发送至任何第三方；处理过程仅在本地或由您配置的 AI 服务端完成。\n\n" +
+        "视频音轨仍只在本机使用 **Whisper** 转写，**不上传**原始音频。"
     }
 }

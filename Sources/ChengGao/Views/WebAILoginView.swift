@@ -15,7 +15,7 @@ struct WebAILoginView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(18)
-            .workspaceGlassPanel(cornerRadius: 18, elevated: true)
+            .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
 
             VStack(spacing: 0) {
                 ForEach(WebAIProvider.allCases) { provider in
@@ -23,7 +23,7 @@ struct WebAILoginView: View {
                     if provider != WebAIProvider.allCases.last { Divider() }
                 }
             }
-            .workspaceGlassPanel(cornerRadius: 18, elevated: true)
+            .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
 
             HStack(spacing: 12) {
                 Label(store.webAIStatus, systemImage: store.webAIEnabled ? "checkmark.circle.fill" : "circle.dashed")
@@ -35,7 +35,7 @@ struct WebAILoginView: View {
             }
             .font(.caption)
             .padding(16)
-            .workspaceGlassPanel(cornerRadius: 16)
+            .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium)
 
             Spacer(minLength: 0)
         }
@@ -50,33 +50,19 @@ struct WebAILoginView: View {
     }
 
     private func providerRow(_ provider: WebAIProvider) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: provider.systemImage)
-                .font(.title3)
-                .frame(width: 28)
-                .foregroundStyle(
-                    store.webAIProvider == provider && store.webAIEnabled
-                        ? Color.accentColor
-                        : Color.secondary
-                )
-            VStack(alignment: .leading, spacing: 4) {
-                Text(provider.title).font(.headline)
-                Text(provider == .qwen ? "qianwen.com 网页会话" : "chat.deepseek.com 网页会话")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if store.webAIProvider == provider && store.webAIEnabled {
-                Text("当前改写渠道")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-            }
+        AccountRow(
+            systemImage: provider.systemImage,
+            title: provider.title,
+            subtitle: provider == .qwen ? "qianwen.com 网页会话" : "chat.deepseek.com 网页会话",
+            statusText: store.webAIProvider == provider && store.webAIEnabled ? "当前改写渠道" : "",
+            statusColor: .green,
+            iconColor: store.webAIProvider == provider && store.webAIEnabled
+                ? Color.accentColor : Color.secondary
+        ) {
             Button(store.webAIProvider == provider ? "打开／重新登录" : "选择并登录") {
                 store.beginWebAILogin(provider)
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
     }
 }
 

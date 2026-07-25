@@ -103,7 +103,7 @@ private struct WorkspaceGlassInsetModifier: ViewModifier {
 
 extension View {
     func workspaceGlassPanel(
-        cornerRadius: CGFloat = 20,
+        cornerRadius: CGFloat = WorkspaceLayout.panelRadiusLarge,
         elevated: Bool = false
     ) -> some View {
         modifier(

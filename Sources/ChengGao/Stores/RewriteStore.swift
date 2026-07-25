@@ -582,7 +582,7 @@ final class RewriteStore {
         let storageID = resolvedHistoryID ?? UUID()
         let updatesCurrentOutput = historyID == nil || output == current
         generatingCoverFormat = format
-        onlineImageGenerationStatus = "正在生成(format.title)…"
+        onlineImageGenerationStatus = "正在生成\(format.title)…"
         errorMessage = nil
 
         imageGenerationTask = Task {
@@ -612,12 +612,12 @@ final class RewriteStore {
                     historyID: resolvedHistoryID,
                     updateCurrentOutput: updatesCurrentOutput
                 )
-                onlineImageGenerationStatus = "(format.title)已生成并保存"
+                onlineImageGenerationStatus = "\(format.title)已生成并保存"
             } catch is CancellationError {
                 onlineImageGenerationStatus = "封面生成已停止"
             } catch {
                 errorMessage = error.localizedDescription
-                onlineImageGenerationStatus = "(format.title)生成失败"
+                onlineImageGenerationStatus = "\(format.title)生成失败"
             }
             generatingCoverFormat = nil
             imageGenerationTask = nil

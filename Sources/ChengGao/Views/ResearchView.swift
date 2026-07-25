@@ -1,9 +1,6 @@
 import SwiftUI
 
 struct ResearchView: View {
-    static let resultsListFraction: CGFloat = 0.75
-    static let detailsFraction: CGFloat = 0.25
-
     @Bindable var researchStore: ResearchStore
     @Bindable var rewriteStore: RewriteStore
 
@@ -77,7 +74,7 @@ struct ResearchView: View {
             }
         }
         .padding(18)
-        .workspaceGlassPanel(cornerRadius: 18, elevated: true)
+        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
     }
 
     private var keywordField: some View {
@@ -118,43 +115,32 @@ struct ResearchView: View {
 
     @ViewBuilder private var messages: some View {
         if let warning = researchStore.warningMessage {
-            Label(warning, systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(.orange)
+            StatusBanner(message: warning, severity: .warning)
         }
         if let error = researchStore.errorMessage {
-            Label(error, systemImage: "xmark.octagon.fill")
-                .foregroundStyle(.red)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.red.opacity(0.08), in: .rect(cornerRadius: 12))
+            StatusBanner(message: error, severity: .error)
         }
     }
 
     private var emptyState: some View {
         ContentUnavailableView(
             "还没有搜索结果",
-            systemImage: "chart.line.uptrend.xyaxis",
-            description: Text("哔哩哔哩优先快速搜索；其他平台会复用账号管理中的网页登录会话。")
+            systemImage: "magnifyingglass",
+            description: Text("在上方输入关键词并点击「搜索爆款」开始发现热门内容。\n哔哩哔哩优先快速搜索；其他平台会复用账号管理中的网页登录会话。")
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .workspaceGlassPanel(cornerRadius: 18, elevated: true)
+        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
     }
 
     private var resultsLayout: some View {
-        GeometryReader { geometry in
-            let dividerWidth: CGFloat = 1
-            let availableWidth = max(0, geometry.size.width - dividerWidth)
-            HStack(spacing: 0) {
-                resultsList
-                    .frame(width: availableWidth * Self.resultsListFraction)
-                Divider()
-                selectedDetail
-                    .frame(width: availableWidth * Self.detailsFraction)
-            }
+        HSplitView {
+            resultsList
+                .frame(minWidth: 280, idealWidth: 480)
+            selectedDetail
+                .frame(minWidth: 240, idealWidth: 320)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .workspaceGlassPanel(cornerRadius: 18, elevated: true)
+        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
     }
 
     private var resultsList: some View {
@@ -194,6 +180,7 @@ struct ResearchView: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 9)
         .padding(.vertical, 9)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func resultRow(_ item: ResearchContent, rank: Int) -> some View {
@@ -233,6 +220,9 @@ struct ResearchView: View {
             .background(researchStore.selectedContentID == item.id ? Color.accentColor.opacity(0.12) : .clear)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("第 \(rank) 名，\(item.platform.title)，\(item.title)")
+        .accessibilityHint("查看这条内容的详细信息与数据指标")
     }
 
     private func platformSelection(_ platform: ResearchPlatform) -> Binding<Bool> {
@@ -296,11 +286,17 @@ private struct ResearchContentDetail: View {
     let content: ResearchContent
     let analyze: () -> Void
     @Environment(\.openURL) private var openURL
+    @State private var imageRetryCount = 0
+
+    private var coverImageURL: URL? {
+        guard let base = content.coverURL else { return nil }
+        return imageRetryCount == 0 ? base : URL(string: "\(base.absoluteString)\(base.query == nil ? "?" : "&")retry=\(imageRetryCount)")
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                if let cover = content.coverURL {
+                if let cover = coverImageURL {
                     AsyncImage(url: cover) { phase in
                         ZStack {
                             Rectangle().fill(.quaternary)
@@ -310,9 +306,13 @@ private struct ResearchContentDetail: View {
                                     .scaledToFill()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                             } else if case .failure = phase {
-                                Image(systemName: "photo")
-                                    .font(.title)
-                                    .foregroundStyle(.tertiary)
+                                VStack(spacing: 6) {
+                                    Image(systemName: "photo")
+                                        .font(.title)
+                                        .foregroundStyle(.tertiary)
+                                    Button("重试加载封面") { imageRetryCount += 1 }
+                                        .controlSize(.small)
+                                }
                             } else {
                                 ProgressView()
                             }
@@ -320,7 +320,7 @@ private struct ResearchContentDetail: View {
                     }
                     .frame(maxWidth: 320)
                     .aspectRatio(16 / 9, contentMode: .fit)
-                    .clipShape(.rect(cornerRadius: 12))
+                    .clipShape(.rect(cornerRadius: WorkspaceLayout.insetRadiusCompact))
                     .clipped()
                 }
 

@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: cheng_gao_app/app_shell
+title: 应用入口与窗口配置
+scope:
+    - Sources/ChengGao/App/
+    - Sources/ChengGao/Support/
+source_files: []
+depends_on: []
+related_to:
+    - path: cheng_gao_app/research_domain
+    - path: cheng_gao_app/rewrite_domain

@@ -28,5 +28,6 @@ struct ChengGaoApp: App {
         Settings {
             SettingsView(store: store)
         }
+        .windowResizability(.contentSize)
     }
 }

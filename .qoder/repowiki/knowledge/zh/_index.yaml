@@ -1,0 +1,169 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: main
+nodes_managed: true
+exported_at: "2026-07-25T12:37:22Z"
+modules:
+    "":
+        dir_name: 澄稿（ChengGao）macOS 应用仓库根
+        title: 澄稿（ChengGao）macOS 应用仓库根
+        scope:
+            - README.md
+            - CONTRIBUTING.md
+            - RELEASE_NOTES.md
+            - SECURITY.md
+            - SUPPORT.md
+            - Package.swift
+            - .gitignore
+            - AGENTS.md
+            - BUILD_NUMBER
+            - CHANGELOG.md
+            - CODE_OF_CONDUCT.md
+            - LICENSE
+            - NOTICE
+            - VERSION
+        source_files: []
+        children:
+            - cheng_gao_app
+            - github_ci
+            - scripts_and_docs
+        depends_on: []
+        related_to: []
+    cheng_gao_app:
+        dir_name: 澄稿（ChengGao）应用主模块
+        title: 澄稿（ChengGao）应用主模块
+        scope:
+            - Sources/ChengGao/
+        source_files: []
+        children:
+            - cheng_gao_app/app_shell
+            - cheng_gao_app/media_tools
+            - cheng_gao_app/research_domain
+            - cheng_gao_app/rewrite_domain
+            - cheng_gao_app/shared_models
+            - cheng_gao_app/web_ai_domain
+        depends_on: []
+        related_to: []
+    cheng_gao_app/app_shell:
+        dir_name: 应用入口与窗口配置
+        title: 应用入口与窗口配置
+        scope:
+            - Sources/ChengGao/App/
+            - Sources/ChengGao/Support/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cheng_gao_app/research_domain
+            - path: cheng_gao_app/rewrite_domain
+    cheng_gao_app/media_tools:
+        dir_name: 短视频媒体工具与内容解析服务
+        title: 短视频媒体工具与内容解析服务
+        scope:
+            - Sources/ChengGao/Services/ChatGPTImageBatchDocument.swift
+            - Sources/ChengGao/Services/CoverArtworkGenerator.swift
+            - Sources/ChengGao/Services/DouyinVideoResolver.swift
+            - Sources/ChengGao/Services/XiaohongshuContentResolver.swift
+            - Sources/ChengGao/Services/ShortVideoExportPackage.swift
+            - Sources/ChengGao/Services/VideoFrameTextExtractor.swift
+            - Sources/ChengGao/Services/VisualPromptGenerator.swift
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cheng_gao_app/research_domain
+            - path: cheng_gao_app/rewrite_domain
+            - path: cheng_gao_app/shared_models
+    cheng_gao_app/research_domain:
+        dir_name: 跨平台内容研究搜索与持久化
+        title: 跨平台内容研究搜索与持久化
+        scope:
+            - Sources/ChengGao/Services/ResearchDatabase.swift
+            - Sources/ChengGao/Services/ResearchSearchService.swift
+            - Sources/ChengGao/Services/WebKitResearchSearchService.swift
+            - Sources/ChengGao/Stores/ResearchStore.swift
+            - Sources/ChengGao/Views/ResearchView.swift
+            - Sources/ChengGao/Views/ResearchAccountsView.swift
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cheng_gao_app/app_shell
+            - path: cheng_gao_app/media_tools
+            - path: cheng_gao_app/shared_models
+    cheng_gao_app/rewrite_domain:
+        dir_name: 素材改写流水线与结果展示
+        title: 素材改写流水线与结果展示
+        scope:
+            - Sources/ChengGao/Services/OfflineRewritePipeline.swift
+            - Sources/ChengGao/Services/OpenRouterRewritePipeline.swift
+            - Sources/ChengGao/Stores/RewriteStore.swift
+            - Sources/ChengGao/Views/ComposerView.swift
+            - Sources/ChengGao/Views/OutputView.swift
+            - Sources/ChengGao/Views/ResultView.swift
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cheng_gao_app/app_shell
+            - path: cheng_gao_app/media_tools
+            - path: cheng_gao_app/shared_models
+            - path: cheng_gao_app/web_ai_domain
+    cheng_gao_app/shared_models:
+        dir_name: 共享数据模型与本地推理服务
+        title: 共享数据模型与本地推理服务
+        scope:
+            - Sources/ChengGao/Models/
+            - Sources/ChengGao/Services/EmbeddedModelRuntime.swift
+            - Sources/ChengGao/Services/LocalSpeechTranscriber.swift
+            - Sources/ChengGao/Services/SpokenSubtitleFormatter.swift
+            - Sources/ChengGao/Services/TerminologyVerifier.swift
+            - Sources/ChengGao/Services/SourceExtractor.swift
+            - Sources/ChengGao/Services/VideoSuggestionPlanner.swift
+            - Sources/ChengGao/Services/CompatibleImageGenerationClient.swift
+            - Sources/ChengGao/Services/OpenRouterCredentialStore.swift
+            - Sources/ChengGao/Services/ResearchCredentialStore.swift
+            - Sources/ChengGao/Services/PlatformSessionStore.swift
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cheng_gao_app/media_tools
+            - path: cheng_gao_app/research_domain
+            - path: cheng_gao_app/rewrite_domain
+            - path: cheng_gao_app/web_ai_domain
+    cheng_gao_app/web_ai_domain:
+        dir_name: 网页 AI 改写流水线与 Web 会话管理
+        title: 网页 AI 改写流水线与 Web 会话管理
+        scope:
+            - Sources/ChengGao/Services/WebAIRewritePipeline.swift
+            - Sources/ChengGao/Services/WebAIWebSession.swift
+            - Sources/ChengGao/Services/OnlineAIModelCatalogClient.swift
+            - Sources/ChengGao/Services/PlatformWebSessionPool.swift
+            - Sources/ChengGao/Views/WebAILoginView.swift
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cheng_gao_app/rewrite_domain
+            - path: cheng_gao_app/shared_models
+    github_ci:
+        dir_name: GitHub Actions 工作流与模板
+        title: GitHub Actions 工作流与模板
+        scope:
+            - .github/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    scripts_and_docs:
+        dir_name: 构建脚本与发行文档
+        title: 构建脚本与发行文档
+        scope:
+            - script/
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

@@ -14,7 +14,7 @@ struct ResearchAccountsView: View {
                         if platform != ResearchPlatform.allCases.last { Divider() }
                     }
                 }
-                .workspaceGlassPanel(cornerRadius: 18, elevated: true)
+                .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
             }
             .scrollIndicators(.visible)
         }
@@ -51,26 +51,18 @@ struct ResearchAccountsView: View {
             }
         }
         .padding(18)
-        .workspaceGlassPanel(cornerRadius: 18, elevated: true)
+        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
     }
 
     private func platformRow(_ platform: ResearchPlatform) -> some View {
         let account = store.account(for: platform)
-        return HStack(spacing: 14) {
-            Image(systemName: platform.systemImage)
-                .font(.title3)
-                .frame(width: 28)
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(platform.title).font(.headline)
-                Text(platform.searchAvailability.label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(accountStatus(platform, account: account))
-                .font(.caption)
-                .foregroundStyle(account?.status == .loggedIn ? .green : .secondary)
+        return AccountRow(
+            systemImage: platform.systemImage,
+            title: platform.title,
+            subtitle: platform.searchAvailability.label,
+            statusText: accountStatus(platform, account: account),
+            statusColor: account?.status == .loggedIn ? .green : .secondary
+        ) {
             if platform != .wechatChannels {
                 Button(account == nil ? "登录" : "重新登录") { store.beginLogin(platform) }
             }
@@ -78,8 +70,6 @@ struct ResearchAccountsView: View {
                 Button("移除", role: .destructive) { store.removeAccount(platform) }
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
     }
 
     private func accountStatus(_ platform: ResearchPlatform, account: ResearchAccount?) -> String {

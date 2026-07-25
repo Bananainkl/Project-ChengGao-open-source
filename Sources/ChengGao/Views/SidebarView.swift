@@ -33,7 +33,7 @@ struct SidebarView: View {
 
                 if !store.history.isEmpty {
                     Section("最近") {
-                        ForEach(store.history.prefix(5)) { item in
+                        ForEach(store.history.prefix(WorkspaceLayout.sidebarRecentCount)) { item in
                             Button {
                                 store.selectHistory(item)
                             } label: {
@@ -59,22 +59,24 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
             .safeAreaInset(edge: .bottom) {
-                HStack(spacing: 8) {
-                    Image(systemName: "lock.shield")
-                    Text(store.privacySummary)
-                    Spacer()
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.shield")
+                        Text(store.privacySummary)
+                        Spacer()
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
             }
         }
         .background(.ultraThinMaterial)
         .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(.white.opacity(0.18))
-                .frame(width: 0.5)
+            Divider()
+                .opacity(0.5)
                 .allowsHitTesting(false)
         }
     }

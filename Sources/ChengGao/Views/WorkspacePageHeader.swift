@@ -5,7 +5,10 @@ struct WorkspacePageHeader: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 28, weight: .semibold, design: .rounded))
+            .font(.system(.title, design: .rounded).weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .truncationMode(.tail)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityAddTraits(.isHeader)
     }

@@ -24,6 +24,7 @@ struct ComposerView: View {
             HStack {
                 Label("素材与处理设置", systemImage: "slider.horizontal.3")
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Text(sourceInputStatus)
                     .font(.caption.monospacedDigit())
@@ -45,10 +46,10 @@ struct ComposerView: View {
             TextEditor(text: sourceInputBinding)
                 .font(.body)
                 .scrollContentBackground(.hidden)
-                .frame(minHeight: 180, idealHeight: 260, maxHeight: 300)
+                .frame(minHeight: 180, idealHeight: 260, maxHeight: .infinity)
                 .disabled(store.isProcessing)
                 .padding(10)
-                .workspaceGlassInset(cornerRadius: 14)
+                .workspaceGlassInset(cornerRadius: WorkspaceLayout.insetRadiusStandard)
                 .overlay(alignment: .topLeading) {
                     if sourceInputBinding.wrappedValue.isEmpty {
                         Text(store.sourceKind == .link
@@ -72,6 +73,7 @@ struct ComposerView: View {
                 if let progress = store.processingProgress {
                     ProgressView(value: progress.fraction)
                         .frame(maxWidth: 220)
+                        .accessibilityValue("\(Int(progress.fraction * 100))%，\(progress.message)")
                     Text(progress.message)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -98,21 +100,16 @@ struct ComposerView: View {
                     .buttonStyle(.borderedProminent)
                 }
                 .padding(12)
-                .background(.green.opacity(0.08), in: .rect(cornerRadius: 12))
+                .background(.green.opacity(0.08), in: .rect(cornerRadius: WorkspaceLayout.insetRadiusCompact))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             if let error = store.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.red.opacity(0.08), in: .rect(cornerRadius: 10))
+                StatusBanner(message: error, severity: .error)
             }
         }
         .padding(16)
-        .workspaceGlassPanel(cornerRadius: 20, elevated: true)
+        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusLarge, elevated: true)
     }
 
     private var sourceInputBinding: Binding<String> {
@@ -141,6 +138,7 @@ struct ComposerView: View {
             } label: {
                 Label(store.style.rawValue, systemImage: store.style.systemImage)
             }
+            .accessibilityLabel("改写风格：\(store.style.rawValue)")
             .glassEffectID("style", in: glassNamespace)
 
             Menu {
@@ -152,6 +150,7 @@ struct ComposerView: View {
             } label: {
                 Label(store.visualStyle.rawValue, systemImage: store.visualStyle.systemImage)
             }
+            .accessibilityLabel("画面风格：\(store.visualStyle.rawValue)")
             .glassEffectID("visual-style", in: glassNamespace)
             .help("画面风格：\(store.visualStyle.summary)")
 
@@ -164,6 +163,7 @@ struct ComposerView: View {
             } label: {
                 Label(store.outputLanguage.rawValue, systemImage: "character.bubble")
             }
+            .accessibilityLabel("输出语言：\(store.outputLanguage.rawValue)")
             .glassEffectID("language", in: glassNamespace)
 
         }
@@ -183,9 +183,9 @@ struct ComposerView: View {
         }
         .padding(12)
         .workspaceGlassInset(
-            cornerRadius: 14,
+            cornerRadius: WorkspaceLayout.insetRadiusStandard,
             tint: .accentColor,
-            tintOpacity: 0.035
+            tintOpacity: WorkspaceLayout.subtleTintOpacity
         )
     }
 
@@ -193,6 +193,7 @@ struct ComposerView: View {
         VStack(alignment: .leading, spacing: 2) {
             Label("AI 控制器", systemImage: "cpu")
                 .font(.subheadline.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
             Text(store.selectedAIControllerProviderLabel)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -273,7 +274,6 @@ struct ComposerView: View {
             .pickerStyle(.segmented)
             .disabled(store.webAIEnabled || store.isProcessing)
             .frame(width: 250)
-            .disabled(store.isProcessing)
             .help("自动不发送额外参数；快速、标准、深入会请求相应推理深度。不支持该参数的兼容接口会自动回退。")
         }
     }

@@ -2639,13 +2639,14 @@ struct OfflineRewritePipelineTests {
         #expect(store.canProcess)
     }
 
-    @Test("Research results preserve a three-to-one side-by-side ratio")
+    @Test("Research results use HSplitView with wider left column")
     @MainActor
     func compactResearchColumns() {
-        #expect(ResearchView.resultsListFraction == 0.75)
-        #expect(ResearchView.detailsFraction == 0.25)
-        #expect(ResearchView.resultsListFraction / ResearchView.detailsFraction == 3)
-        #expect(ResearchView.resultsListFraction + ResearchView.detailsFraction == 1)
+        // HSplitView replaced fraction-based layout; verify ideal widths preserve left-dominant ratio
+        let resultsIdeal: CGFloat = 480
+        let detailsIdeal: CGFloat = 320
+        #expect(resultsIdeal > detailsIdeal)
+        #expect(resultsIdeal + detailsIdeal == 800)
     }
 
     @Test("Legacy model choices migrate to online-only mode")

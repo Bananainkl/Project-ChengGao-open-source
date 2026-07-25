@@ -1,0 +1,17 @@
+schema_version: 1
+module_path: cheng_gao_app/rewrite_domain
+title: 素材改写流水线与结果展示
+scope:
+    - Sources/ChengGao/Services/OfflineRewritePipeline.swift
+    - Sources/ChengGao/Services/OpenRouterRewritePipeline.swift
+    - Sources/ChengGao/Stores/RewriteStore.swift
+    - Sources/ChengGao/Views/ComposerView.swift
+    - Sources/ChengGao/Views/OutputView.swift
+    - Sources/ChengGao/Views/ResultView.swift
+source_files: []
+depends_on: []
+related_to:
+    - path: cheng_gao_app/app_shell
+    - path: cheng_gao_app/media_tools
+    - path: cheng_gao_app/shared_models
+    - path: cheng_gao_app/web_ai_domain

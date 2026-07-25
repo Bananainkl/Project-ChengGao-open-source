@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: scripts_and_docs
+title: 构建脚本与发行文档
+scope:
+    - script/
+    - docs/
+source_files: []
+depends_on: []
+related_to: []

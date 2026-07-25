@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: cheng_gao_app
+title: 澄稿（ChengGao）应用主模块
+scope:
+    - Sources/ChengGao/
+source_files: []
+depends_on: []
+related_to: []

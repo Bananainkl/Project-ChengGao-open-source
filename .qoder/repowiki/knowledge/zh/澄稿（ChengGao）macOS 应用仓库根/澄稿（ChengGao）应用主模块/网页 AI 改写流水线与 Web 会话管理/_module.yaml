@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: cheng_gao_app/web_ai_domain
+title: 网页 AI 改写流水线与 Web 会话管理
+scope:
+    - Sources/ChengGao/Services/WebAIRewritePipeline.swift
+    - Sources/ChengGao/Services/WebAIWebSession.swift
+    - Sources/ChengGao/Services/OnlineAIModelCatalogClient.swift
+    - Sources/ChengGao/Services/PlatformWebSessionPool.swift
+    - Sources/ChengGao/Views/WebAILoginView.swift
+source_files: []
+depends_on: []
+related_to:
+    - path: cheng_gao_app/rewrite_domain
+    - path: cheng_gao_app/shared_models

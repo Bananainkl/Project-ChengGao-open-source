@@ -1,25 +1,33 @@
 import AppKit
 import SwiftUI
 
+struct OutputViewActions {
+    let copyPage: (OutputPage) -> Void
+    let copyAll: () -> Void
+    let copyImagePrompt: (String) -> Void
+    let exportImageMarkdown: () -> Void
+    let exportPackage: () -> Void
+    let saveDraft: (String, String) -> Void
+    let generateImage: (Int) -> Void
+    let generateCover: (CoverFormat) -> Void
+    let generateAllImages: () -> Void
+    let cancelImageGeneration: () -> Void
+    let openGeneratedImage: (String) -> Void
+    let revealGeneratedImage: (String) -> Void
+}
+
+struct ImageGenerationState {
+    let shotID: Int?
+    let coverFormat: CoverFormat?
+    let isGeneratingAll: Bool
+}
+
 struct OutputView: View {
     let output: RewriteOutput
-    let copyPageAction: (OutputPage) -> Void
-    let copyAllAction: () -> Void
-    let copyImagePromptAction: (String) -> Void
-    let exportImageMarkdownAction: () -> Void
-    let exportPackageAction: () -> Void
-    let saveDraftAction: (String, String) -> Void
+    let actions: OutputViewActions
+    let imageState: ImageGenerationState
     let canGenerateImages: Bool
     let imageGenerationStatus: String
-    let generatingImageShotID: Int?
-    let generatingCoverFormat: CoverFormat?
-    let isGeneratingAllImages: Bool
-    let generateImageAction: (Int) -> Void
-    let generateCoverAction: (CoverFormat) -> Void
-    let generateAllImagesAction: () -> Void
-    let cancelImageGenerationAction: () -> Void
-    let openGeneratedImageAction: (String) -> Void
-    let revealGeneratedImageAction: (String) -> Void
 
     @State private var selectedPage: OutputPage = .revised
     @State private var copyFeedback: String?
@@ -42,23 +50,25 @@ struct OutputView: View {
                             .transition(.opacity)
                     }
                     Button("输出", systemImage: "square.and.arrow.up") {
-                        exportPackageAction()
+                        actions.exportPackage()
                     }
-                    .disabled(isGeneratingAllImages || generatingImageShotID != nil)
+                    .accessibilityLabel("导出文稿包")
+                    .disabled(imageState.isGeneratingAll || imageState.shotID != nil)
                     .help(
-                        isGeneratingAllImages || generatingImageShotID != nil
+                        imageState.isGeneratingAll || imageState.shotID != nil
                             ? "图片生成完成或停止后再输出，避免文件包遗漏正在生成的图片"
                             : "选择目录，输出以短视频标题命名的文稿、分镜和图片文件包"
                     )
                     Button {
-                        copyPageAction(selectedPage)
+                        actions.copyPage(selectedPage)
                         showCopyFeedback("已复制本页")
                     } label: {
                         Label("复制本页", systemImage: "doc.on.doc")
                     }
+                    .accessibilityLabel("复制当前页内容")
                     Menu {
                         Button("复制全部五部分") {
-                            copyAllAction()
+                            actions.copyAll()
                             showCopyFeedback("已复制全部")
                         }
                     } label: {
@@ -90,29 +100,15 @@ struct OutputView: View {
             .contentMargins(.vertical, 2, for: .scrollContent)
             .accessibilityLabel("\(selectedPage.title)内容滚动区")
 
-            Divider()
-
-            HStack {
-                Button("上一页", systemImage: "chevron.left") {
-                    movePage(by: -1)
-                }
-                .disabled(selectedPage == .original)
-
-                Spacer()
-
-                Button("下一页", systemImage: "chevron.right") {
-                    movePage(by: 1)
-                }
-                .labelStyle(.titleAndIcon)
-                .disabled(selectedPage == .videos)
-            }
         }
         .padding(22)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .workspaceGlassPanel(cornerRadius: 24, elevated: true)
+        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusLarge, elevated: true)
         .animation(.snappy, value: selectedPage)
-        .onAppear { selectedPage = .revised }
-        .onAppear { resetDraftEditor() }
+        .onAppear {
+            selectedPage = .revised
+            resetDraftEditor()
+        }
         .onChange(of: output) { _, _ in
             resetDraftEditor()
         }
@@ -121,7 +117,7 @@ struct OutputView: View {
             isPresented: $showBatchImageConfirmation,
             titleVisibility: .visible
         ) {
-            Button("开始批量生成") { generateAllImagesAction() }
+            Button("开始批量生成") { actions.generateAllImages() }
             Button("取消", role: .cancel) {}
         } message: {
             Text("包含抖音竖版、横版封面和全部分镜。每张图片都会调用一次当前中转站的图片生成接口，可能产生费用；已保存到本机的图片会自动跳过。")
@@ -165,7 +161,7 @@ struct OutputView: View {
                                 .foregroundStyle(.secondary)
                             }
                             .padding(12)
-                            .workspaceGlassInset(cornerRadius: 12)
+                            .workspaceGlassInset(cornerRadius: WorkspaceLayout.insetRadiusCompact)
                         }
                     }
                     .padding(.top, 8)
@@ -227,9 +223,9 @@ struct OutputView: View {
                             .frame(minHeight: 320)
                             .padding(10)
                             .workspaceGlassInset(
-                                cornerRadius: 16,
+                                cornerRadius: WorkspaceLayout.panelRadiusMedium,
                                 tint: .accentColor,
-                                tintOpacity: 0.055
+                                tintOpacity: WorkspaceLayout.emphasizedTintOpacity
                             )
                         HStack {
                             Spacer()
@@ -238,7 +234,7 @@ struct OutputView: View {
                                 isEditingDraft = false
                             }
                             Button("保存修改") {
-                                saveDraftAction(editedTitle, editedBody)
+                                actions.saveDraft(editedTitle, editedBody)
                                 isEditingDraft = false
                                 showCopyFeedback("已保存成稿")
                             }
@@ -266,31 +262,34 @@ struct OutputView: View {
                 HStack(spacing: 10) {
                     Label(
                         imageGenerationStatus,
-                        systemImage: isGeneratingAllImages ? "photo.stack.fill" : "photo.badge.checkmark"
+                        systemImage: imageState.isGeneratingAll ? "photo.stack.fill" : "photo.badge.checkmark"
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     Spacer()
-                    if isGeneratingAllImages || generatingImageShotID != nil {
-                        Button("停止生成", systemImage: "stop.fill", action: cancelImageGenerationAction)
+                    if imageState.isGeneratingAll || imageState.shotID != nil {
+                        Button("停止生成", systemImage: "stop.fill", action: actions.cancelImageGeneration)
+                            .accessibilityLabel("停止当前图片生成任务")
                     } else {
                         Button("导出给 ChatGPT", systemImage: "square.and.arrow.up") {
-                            exportImageMarkdownAction()
+                            actions.exportImageMarkdown()
                         }
+                        .accessibilityLabel("导出图片提示词给 ChatGPT")
                         .disabled(visualShots.isEmpty)
                         .help("把全部提示词按每 10 张一批导出为可续跑的 Markdown 任务文档")
                         Button("批量生成封面与配图", systemImage: "photo.stack") {
                             showBatchImageConfirmation = true
                         }
+                        .accessibilityLabel("批量生成所有封面和分镜配图")
                         .disabled(!canGenerateImages || visualShots.isEmpty)
                         .help(canGenerateImages ? "逐张调用图片接口；会先要求确认" : "请先在 AI 设置中配置图片接口、模型和独立 Key")
                     }
                 }
                 .padding(12)
                 .workspaceGlassInset(
-                    cornerRadius: 14,
+                    cornerRadius: WorkspaceLayout.insetRadiusStandard,
                     tint: .accentColor,
-                    tintOpacity: 0.045
+                    tintOpacity: WorkspaceLayout.subtleTintOpacity
                 )
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -327,18 +326,18 @@ struct OutputView: View {
                                         shot.generatedImagePath == nil ? "生成图片" : "重新生成",
                                         systemImage: shot.generatedImagePath == nil ? "photo.badge.plus" : "arrow.clockwise"
                                     ) {
-                                        generateImageAction(shot.id)
+                                        actions.generateImage(shot.id)
                                     }
                                     .controlSize(.small)
                                     .disabled(!canGenerateImages)
                                     .help(canGenerateImages ? "调用当前图片模型生成这一张图片" : "请先在 AI 设置中配置图片接口、模型和独立 Key")
                                     Button("复制提示词", systemImage: "doc.on.doc") {
-                                        copyImagePromptAction(shot.prompt)
+                                        actions.copyImagePrompt(shot.prompt)
                                         showCopyFeedback("已复制绘图提示词")
                                     }
                                     .controlSize(.small)
                                 }
-                                if generatingImageShotID == shot.id {
+                                if imageState.shotID == shot.id {
                                     HStack(spacing: 8) {
                                         ProgressView().controlSize(.small)
                                         Text("正在通过中转站生成图片…")
@@ -353,16 +352,16 @@ struct OutputView: View {
                                             .resizable()
                                             .scaledToFit()
                                             .frame(maxWidth: .infinity, maxHeight: 360)
-                                            .background(.black.opacity(0.08), in: .rect(cornerRadius: 12))
-                                            .clipShape(.rect(cornerRadius: 12))
+                                            .background(.black.opacity(0.08), in: .rect(cornerRadius: WorkspaceLayout.insetRadiusCompact))
+                                            .clipShape(.rect(cornerRadius: WorkspaceLayout.insetRadiusCompact))
                                         HStack {
                                             Label("图片已保存到本机", systemImage: "checkmark.circle.fill")
                                                 .font(.caption)
                                                 .foregroundStyle(.green)
                                             Spacer()
-                                            Button("打开图片") { openGeneratedImageAction(path) }
+                                            Button("打开图片") { actions.openGeneratedImage(path) }
                                                 .controlSize(.small)
-                                            Button("在访达中显示") { revealGeneratedImageAction(path) }
+                                            Button("在访达中显示") { actions.revealGeneratedImage(path) }
                                                 .controlSize(.small)
                                         }
                                     }
@@ -381,7 +380,7 @@ struct OutputView: View {
                             Spacer(minLength: 0)
                         }
                         .padding(16)
-                        .workspaceGlassInset(cornerRadius: 16)
+                        .workspaceGlassInset(cornerRadius: WorkspaceLayout.panelRadiusMedium)
                     }
                 }
             }
@@ -410,7 +409,7 @@ struct OutputView: View {
                                     .font(.headline)
                                     Spacer()
                                     Button("复制提示词", systemImage: "doc.on.doc") {
-                                        copyImagePromptAction(suggestion.prompt)
+                                        actions.copyImagePrompt(suggestion.prompt)
                                         showCopyFeedback("已复制视频提示词")
                                     }
                                     .controlSize(.small)
@@ -426,7 +425,7 @@ struct OutputView: View {
                             Spacer(minLength: 0)
                         }
                         .padding(16)
-                        .workspaceGlassInset(cornerRadius: 16)
+                        .workspaceGlassInset(cornerRadius: WorkspaceLayout.panelRadiusMedium)
                     }
                 }
             }
@@ -444,17 +443,17 @@ struct OutputView: View {
                     cover.generatedImagePath == nil ? "生成封面" : "重新生成",
                     systemImage: cover.generatedImagePath == nil ? "photo.badge.plus" : "arrow.clockwise"
                 ) {
-                    generateCoverAction(cover.format)
+                    actions.generateCover(cover.format)
                 }
                 .controlSize(.small)
                 .disabled(!canGenerateImages)
                 Button("复制提示词", systemImage: "doc.on.doc") {
-                    copyImagePromptAction(cover.prompt)
+                    actions.copyImagePrompt(cover.prompt)
                     showCopyFeedback("已复制封面提示词")
                 }
                 .controlSize(.small)
             }
-            if generatingCoverFormat == cover.format {
+            if imageState.coverFormat == cover.format {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("正在生成背景并排入准确标题…")
@@ -468,15 +467,15 @@ struct OutputView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: 390)
-                    .background(.black.opacity(0.08), in: .rect(cornerRadius: 12))
-                    .clipShape(.rect(cornerRadius: 12))
+                    .background(.black.opacity(0.08), in: .rect(cornerRadius: WorkspaceLayout.insetRadiusCompact))
+                    .clipShape(.rect(cornerRadius: WorkspaceLayout.insetRadiusCompact))
                 HStack {
                     Label("准确标题已在本机排版", systemImage: "checkmark.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.green)
                     Spacer()
-                    Button("打开图片") { openGeneratedImageAction(path) }.controlSize(.small)
-                    Button("在访达中显示") { revealGeneratedImageAction(path) }.controlSize(.small)
+                    Button("打开图片") { actions.openGeneratedImage(path) }.controlSize(.small)
+                    Button("在访达中显示") { actions.revealGeneratedImage(path) }.controlSize(.small)
                 }
             }
             Text("封面提示词")
@@ -488,7 +487,7 @@ struct OutputView: View {
                 .textSelection(.enabled)
         }
         .padding(16)
-        .workspaceGlassInset(cornerRadius: 16)
+        .workspaceGlassInset(cornerRadius: WorkspaceLayout.panelRadiusMedium)
     }
 
     @ViewBuilder
@@ -505,6 +504,7 @@ struct OutputView: View {
                     .foregroundStyle(.tint)
                 Text(title)
                     .font(.title3.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Text(subtitle)
                     .font(.caption)
@@ -522,9 +522,9 @@ struct OutputView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
             .workspaceGlassInset(
-                cornerRadius: 16,
+                cornerRadius: WorkspaceLayout.panelRadiusMedium,
                 tint: emphasized ? .accentColor : .clear,
-                tintOpacity: emphasized ? 0.055 : 0
+                tintOpacity: emphasized ? WorkspaceLayout.emphasizedTintOpacity : 0
             )
     }
 
@@ -542,17 +542,10 @@ struct OutputView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(14)
         .workspaceGlassInset(
-            cornerRadius: 14,
+            cornerRadius: WorkspaceLayout.insetRadiusStandard,
             tint: emphasized ? .accentColor : .clear,
-            tintOpacity: emphasized ? 0.055 : 0
+            tintOpacity: emphasized ? WorkspaceLayout.emphasizedTintOpacity : 0
         )
-    }
-
-    private func movePage(by offset: Int) {
-        let pages = OutputPage.allCases
-        guard let current = pages.firstIndex(of: selectedPage) else { return }
-        let destination = min(max(0, current + offset), pages.count - 1)
-        selectedPage = pages[destination]
     }
 
     private var visualShots: [VisualShot] {
