@@ -21,7 +21,7 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ ! -f "$SOURCE_DMG" ]]; then
-  echo "找不到 $SOURCE_DMG，请先运行 package_dmg.sh。" >&2
+  echo "找不到 ${SOURCE_DMG}，请先运行 package_dmg.sh。" >&2
   exit 2
 fi
 

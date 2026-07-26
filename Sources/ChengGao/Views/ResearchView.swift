@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct ResearchView: View {
+    static let resultsListFraction: CGFloat = 2.0 / 3.0
+    static let detailsFraction: CGFloat = 1.0 / 3.0
+
     @Bindable var researchStore: ResearchStore
     @Bindable var rewriteStore: RewriteStore
 
@@ -133,11 +136,16 @@ struct ResearchView: View {
     }
 
     private var resultsLayout: some View {
-        HSplitView {
-            resultsList
-                .frame(minWidth: 280, idealWidth: 480)
-            selectedDetail
-                .frame(minWidth: 240, idealWidth: 320)
+        GeometryReader { geometry in
+            let dividerWidth: CGFloat = 1
+            let availableWidth = max(0, geometry.size.width - dividerWidth)
+            HStack(spacing: 0) {
+                resultsList
+                    .frame(width: availableWidth * Self.resultsListFraction)
+                Divider()
+                selectedDetail
+                    .frame(width: availableWidth * Self.detailsFraction)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
@@ -171,9 +179,9 @@ struct ResearchView: View {
     private var resultHeader: some View {
         HStack {
             Text("排名").frame(width: 34)
-            Text("平台").frame(width: 58, alignment: .leading)
+            Text("平台").frame(width: 62, alignment: .leading)
             Text("标题").frame(maxWidth: .infinity, alignment: .leading)
-            Text("播放").frame(width: 58, alignment: .trailing)
+            Text("点赞").frame(width: 52, alignment: .trailing)
             Text("热度").frame(width: 44, alignment: .trailing)
         }
         .font(.caption.weight(.semibold))
@@ -208,7 +216,7 @@ struct ResearchView: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Text(metric(item.viewCount)).frame(width: 58, alignment: .trailing)
+                Text(metricLikeCount(item.likeCount)).frame(width: 52, alignment: .trailing)
                 Text(item.hotScore, format: .number.precision(.fractionLength(1)))
                     .monospacedDigit()
                     .frame(width: 44, alignment: .trailing)
@@ -280,6 +288,14 @@ struct ResearchView: View {
         if value >= 10_000 { return String(format: "%.1f万", Double(value) / 10_000) }
         return value.formatted()
     }
+
+    private func metricLikeCount(_ count: Int?) -> String {
+        guard let count else { return "–" }
+        if count >= 10_000 {
+            return String(format: "%.1f", Double(count) / 10_000) + "万"
+        }
+        return String(count)
+    }
 }
 
 private struct ResearchContentDetail: View {
@@ -291,6 +307,14 @@ private struct ResearchContentDetail: View {
     private var coverImageURL: URL? {
         guard let base = content.coverURL else { return nil }
         return imageRetryCount == 0 ? base : URL(string: "\(base.absoluteString)\(base.query == nil ? "?" : "&")retry=\(imageRetryCount)")
+    }
+
+    private func metricLikeCount(_ count: Int?) -> String {
+        guard let count else { return "–" }
+        if count >= 10_000 {
+            return String(format: "%.1f", Double(count) / 10_000) + "万"
+        }
+        return String(count)
     }
 
     var body: some View {
@@ -326,6 +350,19 @@ private struct ResearchContentDetail: View {
 
                 Text(content.title)
                     .font(.headline)
+                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
+                    GridRow {
+                        metricCard("点赞数", metricLikeCount(content.likeCount))
+                        metricCard("收藏数", metricLikeCount(content.collectCount))
+                    }
+                    GridRow {
+                        metricCard("评论数", metricLikeCount(content.commentCount))
+                        metricCard("综合热度", String(format: "%.1f", content.hotScore))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
+
                 if content.platform == .xiaohongshu {
                     Label(
                         content.resolvedContentKind == .video ? "视频 · 将取得音轨并转写口播" : "图文 · 将识别正文与原图并重新设计",
@@ -336,24 +373,6 @@ private struct ResearchContentDetail: View {
                 }
                 Text(content.authorName ?? "作者不可获取")
                     .foregroundStyle(.secondary)
-
-                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
-                    GridRow {
-                        compactMetric("播放", metric(content.viewCount))
-                            .gridCellColumns(2)
-                    }
-                    GridRow {
-                        compactMetric("点赞", metric(content.likeCount))
-                        compactMetric("评论", metric(content.commentCount))
-                    }
-                    GridRow {
-                        compactMetric("收藏", metric(content.collectCount))
-                        compactMetric(
-                            "综合热度",
-                            content.hotScore.formatted(.number.precision(.fractionLength(2)))
-                        )
-                    }
-                }
 
                 Label(
                     "指标可信度：\(content.metricConfidence.rawValue) · \(content.metricConfidence.explanation)",
@@ -385,23 +404,23 @@ private struct ResearchContentDetail: View {
                     .frame(maxWidth: .infinity)
             }
             .padding(12)
-            .frame(maxWidth: 460, alignment: .leading)
+            .frame(maxWidth: 350, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .scrollIndicators(.never)
     }
 
-    private func compactMetric(_ title: String, _ value: String) -> some View {
-        HStack(spacing: 8) {
-            Text(title).foregroundStyle(.secondary)
-            Spacer(minLength: 4)
+    private func metricCard(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             Text(value)
+                .font(.title3)
+                .monospacedDigit()
                 .lineLimit(1)
         }
-    }
-
-    private func metric(_ value: Int?) -> String {
-        ResearchContent.trustedMetric(value)?.formatted() ?? "数据不可获取"
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var confidenceImage: String {
