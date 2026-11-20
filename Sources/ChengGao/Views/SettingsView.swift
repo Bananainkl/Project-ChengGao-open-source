@@ -69,25 +69,29 @@ struct SettingsView: View {
                 }
                 .accessibilityLabel("改写服务提供商")
                 LabeledContent("API 地址") {
-                    TextField("可填写服务根地址", text: $store.onlineEndpointDraft)
+                    TextField("改写 API 地址", text: $store.onlineEndpointDraft, prompt: Text("可填写服务根地址"))
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("改写 API 地址")
                 }
                 Text(store.resolvedOnlineEndpointDescription)
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                HStack {
-                    if store.onlineProvider != .custom {
-                        Button("恢复推荐参数", action: store.restoreOnlineProviderDefaults)
-                    }
-                    if let url = store.onlineProvider.documentationURL {
-                        Link("查看官方文档", destination: url)
+                if store.onlineProvider != .custom || store.onlineProvider.documentationURL != nil {
+                    HStack {
+                        if store.onlineProvider != .custom {
+                            Button("恢复推荐参数", action: store.restoreOnlineProviderDefaults)
+                        }
+                        if let url = store.onlineProvider.documentationURL {
+                            Link("查看官方文档", destination: url)
+                        }
                     }
                 }
             }
             Section("模型") {
                 LabeledContent("模型名称") {
-                    TextField("可手动输入模型 ID", text: $store.onlineModelDraft)
+                    TextField("改写模型名称", text: $store.onlineModelDraft, prompt: Text("模型 ID"))
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("改写模型名称")
                 }
@@ -96,9 +100,10 @@ struct SettingsView: View {
             Section {
                 LabeledContent("API Key") {
                     SecureField(
-                        store.hasOnlineAPIKey ? "输入新 Key 可替换" : store.onlineProvider.keyPlaceholder,
-                        text: $store.onlineAPIKeyDraft
+                        "改写 API Key", text: $store.onlineAPIKeyDraft,
+                        prompt: Text(store.hasOnlineAPIKey ? "输入新 Key 可替换" : store.onlineProvider.keyPlaceholder)
                     )
+                    .labelsHidden()
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("改写 API Key")
                 }
@@ -154,7 +159,8 @@ struct SettingsView: View {
         Form {
             Section("服务连接") {
                 LabeledContent("图片 API 地址") {
-                    TextField("留空时从改写 API 地址推导", text: $store.onlineImageEndpointDraft)
+                    TextField("图片 API 地址", text: $store.onlineImageEndpointDraft, prompt: Text("留空时从改写 API 地址推导"))
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("图片 API 地址")
                 }
@@ -165,7 +171,8 @@ struct SettingsView: View {
             }
             Section("模型与画面") {
                 LabeledContent("图片模型") {
-                    TextField("可手动输入图片模型 ID", text: $store.onlineImageModelDraft)
+                    TextField("图片模型名称", text: $store.onlineImageModelDraft, prompt: Text("图片模型 ID"))
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("图片模型名称")
                 }
@@ -180,9 +187,10 @@ struct SettingsView: View {
             Section {
                 LabeledContent("图片 API Key") {
                     SecureField(
-                        store.hasOnlineImageAPIKey ? "输入新 Key 可替换" : "图片接口 Bearer API Key",
-                        text: $store.onlineImageAPIKeyDraft
+                        "图片 API Key", text: $store.onlineImageAPIKeyDraft,
+                        prompt: Text(store.hasOnlineImageAPIKey ? "输入新 Key 可替换" : "图片接口 Bearer API Key")
                     )
+                    .labelsHidden()
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("图片 API Key")
                 }

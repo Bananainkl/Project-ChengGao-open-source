@@ -31,7 +31,8 @@ struct ResearchAccountsView: View {
     private var youtubeAPISection: some View {
         VStack(alignment: .leading, spacing: 8) {
             LabeledContent("API Key") {
-                SecureField("输入 Google Data API Key", text: $store.youtubeAPIKeyDraft)
+                SecureField("YouTube API Key", text: $store.youtubeAPIKeyDraft, prompt: Text("输入 Google Data API Key"))
+                    .labelsHidden()
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("YouTube API Key")
             }
