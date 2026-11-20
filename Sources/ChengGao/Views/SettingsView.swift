@@ -8,6 +8,7 @@ enum SettingsPage: String {
 struct SettingsView: View {
     @Bindable var store: RewriteStore
     @AppStorage(SettingsPage.storageKey) private var page = SettingsPage.general
+    @AppStorage(ManuscriptTextSize.storageKey) private var textSize = ManuscriptTextSize.standard
     @State private var deleteKeyFor: SettingsPage?
 
     var body: some View {
@@ -16,7 +17,7 @@ struct SettingsView: View {
             Tab("改写 API", systemImage: "text.and.sparkles", value: SettingsPage.rewrite) { onlineAISettings }
             Tab("图片 API", systemImage: "photo", value: SettingsPage.images) { imageSettings }
         }
-        .frame(minWidth: 520, idealWidth: 650, minHeight: 400, idealHeight: 540)
+        .frame(minWidth: 560, idealWidth: 700, minHeight: 440, idealHeight: 540)
         .confirmationDialog("删除已保存的 Key？", isPresented: Binding(
             get: { deleteKeyFor != nil }, set: { if !$0 { deleteKeyFor = nil } }
         ), presenting: deleteKeyFor) { target in
@@ -29,22 +30,31 @@ struct SettingsView: View {
 
     private var generalSettings: some View {
         Form {
-            Section("处理") {
-                Toggle("联网核验专有名词", isOn: $store.onlineTerminologyCheck)
-                Text("开启后只向中文维基百科查询候选专有名词，不发送完整原稿。")
-                    .font(.caption)
+            Section("文稿显示") {
+                Picker("文稿字号", selection: $textSize) {
+                    ForEach(ManuscriptTextSize.allCases) { size in Text(size.label).tag(size) }
+                }
+                Text("写稿、校阅与历史文稿使用相同字号。")
+                    .font(textSize.font)
                     .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("联网核验专有名词", isOn: $store.onlineTerminologyCheck)
+            } header: {
+                Text("处理")
+            } footer: {
+                Text("核验时只向中文维基百科发送候选专有名词。")
             }
             Section("隐私") {
                 Label(store.privacySummary, systemImage: "lock.shield")
                 Text(store.privacyDisclosure)
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
             Section("视频转写") {
                 LabeledContent("本机模型", value: "Whisper Small Q5_1")
-                Text("只有平台没有字幕时才在本机识别音轨；识别完成后，完整原稿交给在线 AI 全文处理。")
-                    .font(.caption)
+                Text("没有平台字幕时使用本机识别音轨，转写全文交给选定的改写服务。")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
         }
@@ -53,227 +63,198 @@ struct SettingsView: View {
 
     private var onlineAISettings: some View {
         Form {
-            Section("在线 AI 提供商") {
+            Section("服务连接") {
                 Picker("提供商", selection: $store.onlineProvider) {
-                    ForEach(OnlineAIProvider.allCases) { provider in
-                        Text(provider.displayName).tag(provider)
+                    ForEach(OnlineAIProvider.allCases) { provider in Text(provider.displayName).tag(provider) }
+                }
+                .accessibilityLabel("改写服务提供商")
+                LabeledContent("API 地址") {
+                    TextField("可填写服务根地址", text: $store.onlineEndpointDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("改写 API 地址")
+                }
+                Text(store.resolvedOnlineEndpointDescription)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    if store.onlineProvider != .custom {
+                        Button("恢复推荐参数", action: store.restoreOnlineProviderDefaults)
+                    }
+                    if let url = store.onlineProvider.documentationURL {
+                        Link("查看官方文档", destination: url)
                     }
                 }
-                .pickerStyle(.menu)
-                .accessibilityLabel("改写服务提供商")
-
-                LabeledContent("当前提供商") {
-                    Label(store.onlineProvider.displayName, systemImage: store.onlineProvider.systemImage)
-                }
-                Text("不同提供商分别保存 API Key。应用不访问 macOS 钥匙串，Key 只保存在权限为 0600、仅当前用户可读的本地凭证文件。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-
-            Section("连接参数") {
-                TextField("API 地址（可填写中转站根地址）", text: $store.onlineEndpointDraft)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("改写 API 地址")
-                Text(store.resolvedOnlineEndpointDescription)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section("模型") {
                 LabeledContent("模型名称") {
                     TextField("可手动输入模型 ID", text: $store.onlineModelDraft)
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("改写模型名称")
                 }
-                HStack {
-                    if !store.onlineAvailableModels.isEmpty {
-                        Picker("远程可用模型", selection: $store.onlineModelDraft) {
-                            if !store.onlineModelDraft.isEmpty,
-                               !store.onlineAvailableModels.contains(store.onlineModelDraft) {
-                                Text("当前：\(store.onlineModelDraft)").tag(store.onlineModelDraft)
-                            }
-                            ForEach(store.onlineAvailableModels, id: \.self) { model in
-                                Text(model).tag(model)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                    Button("读取远程模型", action: store.refreshOnlineModelCatalog)
-                        .disabled(store.isLoadingOnlineModels)
-                    if store.isLoadingOnlineModels {
-                        ProgressView().controlSize(.small)
-                    }
-                    Spacer()
-                    Text(store.onlineModelCatalogStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                rewriteModelCatalog
+            }
+            Section {
                 LabeledContent("API Key") {
                     SecureField(
-                        store.hasOnlineAPIKey ? "已保存；输入新 Key 可替换" : store.onlineProvider.keyPlaceholder,
+                        store.hasOnlineAPIKey ? "输入新 Key 可替换" : store.onlineProvider.keyPlaceholder,
                         text: $store.onlineAPIKeyDraft
                     )
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("改写 API Key")
                 }
-                Label(
-                    store.onlineCredentialEntryHint,
-                    systemImage: store.hasOnlineAPIKey ? "checkmark.shield.fill" : "key"
-                )
-                .font(.caption)
-                .foregroundStyle(store.hasOnlineAPIKey ? .green : .secondary)
-
-                HStack {
-                    if store.onlineProvider != .custom {
-                        Button("恢复推荐参数", action: store.restoreOnlineProviderDefaults)
-                    }
-                    if let documentationURL = store.onlineProvider.documentationURL {
-                        Link("查看官方文档", destination: documentationURL)
-                    }
-                    Spacer()
-                    if store.hasOnlineAPIKey {
-                        Button("删除当前 Key…", role: .destructive) { deleteKeyFor = .rewrite }
-                    }
+                Label(store.onlineCredentialEntryHint, systemImage: store.hasOnlineAPIKey ? "checkmark.shield" : "key")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                if store.hasOnlineAPIKey {
+                    Button("删除当前 Key…", role: .destructive) { deleteKeyFor = .rewrite }
                 }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("保存改写 API")
-                        .font(.headline)
-                    HStack {
-                        Button("保存并测试改写 API", action: store.saveAndTestOnlineAIConfiguration)
-                            .buttonStyle(.borderedProminent)
-                            .disabled(store.isTestingOnlineAI)
-                        Button("仅保存改写 API", action: store.saveOnlineAIConfiguration)
-                            .disabled(store.isTestingOnlineAI)
-                        Button("重新测试", action: store.testOnlineAIConnection)
-                            .disabled(store.isTestingOnlineAI)
-                        if store.isTestingOnlineAI { ProgressView().controlSize(.small) }
-                    }
-                    Label(store.onlineAIStatus, systemImage: onlineStatusImage)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(onlineStatusColor)
-                        .accessibilityLabel("改写 API 状态：\(store.onlineAIStatus)")
-                    Text("保存成功后会在这里明确显示“配置已保存”；连接测试只发送一条不含原稿的 OK 消息。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 4)
+            } header: {
+                Text("凭证")
+            } footer: {
+                Text("各提供商的 Key 分开保存在仅当前用户可读的本地文件。测试只发送一条不含原稿的 OK 消息。")
             }
-
         }
         .formStyle(.grouped)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            saveBar(status: rewriteSaveStatus) {
+                if store.isTestingOnlineAI { ProgressView().controlSize(.small).accessibilityLabel("正在测试连接") }
+                Button("重新测试", action: store.testOnlineAIConnection)
+                    .disabled(store.isTestingOnlineAI)
+                Button("仅保存改写 API", action: store.saveOnlineAIConfiguration)
+                    .disabled(store.isTestingOnlineAI)
+                Button("保存并测试改写 API", action: store.saveAndTestOnlineAIConfiguration)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.isTestingOnlineAI)
+            }
+        }
+    }
+
+    private var rewriteModelCatalog: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !store.onlineAvailableModels.isEmpty {
+                Picker("远程可用模型", selection: $store.onlineModelDraft) {
+                    if !store.onlineAvailableModels.contains(store.onlineModelDraft) {
+                        Text(store.onlineModelDraft.isEmpty ? "请选择模型" : store.onlineModelDraft).tag(store.onlineModelDraft)
+                    }
+                    ForEach(store.onlineAvailableModels, id: \.self) { model in Text(model).tag(model) }
+                }
+            }
+            HStack {
+                Button("读取远程模型", action: store.refreshOnlineModelCatalog)
+                    .disabled(store.isLoadingOnlineModels)
+                if store.isLoadingOnlineModels { ProgressView().controlSize(.small) }
+            }
+            Text(store.onlineModelCatalogStatus)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var imageSettings: some View {
         Form {
-            Section("图片生成（可选，独立设置）") {
-                TextField(
-                    "图片 API 地址；留空则从聊天接口自动推导",
-                    text: $store.onlineImageEndpointDraft
-                )
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel("图片 API 地址")
+            Section("服务连接") {
+                LabeledContent("图片 API 地址") {
+                    TextField("留空时从改写 API 地址推导", text: $store.onlineImageEndpointDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("图片 API 地址")
+                }
                 Text(store.resolvedImageGenerationEndpointDescription)
-                    .font(.caption)
-                    .foregroundStyle(
-                        OnlineImageGenerationConfiguration.looksLikeCredential(store.onlineImageEndpointDraft)
-                            ? Color.red
-                            : Color.secondary
-                    )
-
+                    .font(.callout)
+                    .foregroundStyle(OnlineImageGenerationConfiguration.looksLikeCredential(store.onlineImageEndpointDraft)
+                                     ? Color.red : Color.secondary)
+            }
+            Section("模型与画面") {
+                LabeledContent("图片模型") {
+                    TextField("可手动输入图片模型 ID", text: $store.onlineImageModelDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("图片模型名称")
+                }
+                imageModelCatalog
+                Picker("画面尺寸", selection: $store.onlineImageSize) {
+                    ForEach(OnlineImageGenerationSize.allCases) { size in Text(size.displayName).tag(size) }
+                }
+                Picker("图片质量", selection: $store.onlineImageQuality) {
+                    ForEach(OnlineImageGenerationQuality.allCases) { quality in Text(quality.displayName).tag(quality) }
+                }
+            }
+            Section {
                 LabeledContent("图片 API Key") {
                     SecureField(
-                        store.hasOnlineImageAPIKey ? "已独立保存；输入新 Key 可替换" : "图片接口 Bearer API Key",
+                        store.hasOnlineImageAPIKey ? "输入新 Key 可替换" : "图片接口 Bearer API Key",
                         text: $store.onlineImageAPIKeyDraft
                     )
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("图片 API Key")
                 }
-                Label(
-                    store.onlineImageCredentialEntryHint,
-                    systemImage: store.hasOnlineImageAPIKey ? "checkmark.shield.fill" : "key"
-                )
-                .font(.caption)
-                .foregroundStyle(store.hasOnlineImageAPIKey ? .green : .secondary)
-
-                LabeledContent("图片模型") {
-                    TextField("例如 gpt-image-1 或中转站提供的模型 ID", text: $store.onlineImageModelDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("图片模型名称")
-                }
-                HStack {
-                    if !store.onlineImageAvailableModels.isEmpty {
-                        Picker("图片接口可用模型", selection: $store.onlineImageModelDraft) {
-                            if store.onlineImageModelDraft.isEmpty {
-                                Text("请选择图片模型").tag("")
-                            } else if !store.onlineImageAvailableModels.contains(store.onlineImageModelDraft) {
-                                Text("当前：\(store.onlineImageModelDraft)").tag(store.onlineImageModelDraft)
-                            }
-                            ForEach(store.onlineImageAvailableModels, id: \.self) { model in
-                                Text(model).tag(model)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                    Button("读取图片模型", action: store.refreshOnlineImageModelCatalog)
-                        .disabled(store.isLoadingOnlineImageModels)
-                    if store.isLoadingOnlineImageModels {
-                        ProgressView().controlSize(.small)
-                    }
-                    Spacer()
-                    Text(store.onlineImageModelCatalogStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                HStack {
-                    Picker("画面尺寸", selection: $store.onlineImageSize) {
-                        ForEach(OnlineImageGenerationSize.allCases) { size in
-                            Text(size.displayName).tag(size)
-                        }
-                    }
-                    Picker("图片质量", selection: $store.onlineImageQuality) {
-                        ForEach(OnlineImageGenerationQuality.allCases) { quality in
-                            Text(quality.displayName).tag(quality)
-                        }
-                    }
-                }
-
-                HStack {
-                    Button("保存图片生成设置", action: store.saveOnlineImageGenerationConfiguration)
-                        .buttonStyle(.borderedProminent)
-                    if store.hasOnlineImageAPIKey {
-                        Button("删除图片 Key…", role: .destructive) { deleteKeyFor = .images }
-                    }
-                    Spacer()
-                    Label(store.onlineImageGenerationStatus, systemImage: "photo.badge.checkmark")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Text("图片 Key 与聊天 Key 分开保存、互不覆盖；读取图片模型和实际生图只使用图片 Key。兼容中转站返回 image_url、url 或 b64_json；只有读取模型或在处理结果页点击生成时才会调用图片接口，并可能产生费用。")
-                    .font(.caption)
+                Label(store.onlineImageCredentialEntryHint, systemImage: store.hasOnlineImageAPIKey ? "checkmark.shield" : "key")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-            }
-
-            Section("处理方式") {
-                LabeledContent("改写引擎", value: "在线 AI · 全文处理")
-                Text("不再使用本地千问模型，也不把文章拆成小段分别改写。初稿未通过事实覆盖和实质改写检查时，会把全文与问题清单再次交给在线 AI 统一重写。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if store.hasOnlineImageAPIKey {
+                    Button("删除图片 Key…", role: .destructive) { deleteKeyFor = .images }
+                }
+            } header: {
+                Text("凭证")
+            } footer: {
+                Text("图片服务使用独立的 Key。读取图片模型或点击生成时才会调用图片服务，可能产生费用。")
             }
         }
         .formStyle(.grouped)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            saveBar(status: Label(store.onlineImageGenerationStatus, systemImage: "photo").foregroundStyle(.secondary)) {
+                Button("保存图片生成设置", action: store.saveOnlineImageGenerationConfiguration)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private var imageModelCatalog: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !store.onlineImageAvailableModels.isEmpty {
+                Picker("图片接口可用模型", selection: $store.onlineImageModelDraft) {
+                    if !store.onlineImageAvailableModels.contains(store.onlineImageModelDraft) {
+                        Text(store.onlineImageModelDraft.isEmpty ? "请选择图片模型" : store.onlineImageModelDraft)
+                            .tag(store.onlineImageModelDraft)
+                    }
+                    ForEach(store.onlineImageAvailableModels, id: \.self) { model in Text(model).tag(model) }
+                }
+            }
+            HStack {
+                Button("读取图片模型", action: store.refreshOnlineImageModelCatalog)
+                    .disabled(store.isLoadingOnlineImageModels)
+                if store.isLoadingOnlineImageModels { ProgressView().controlSize(.small) }
+            }
+            Text(store.onlineImageModelCatalogStatus)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func saveBar<Status: View, Actions: View>(status: Status, @ViewBuilder actions: () -> Actions) -> some View {
+        VStack(spacing: 0) {
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                status.font(.callout).fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer(minLength: 0)
+                    actions()
+                }
+            }
+            .padding(14)
+        }
+        .background(.background)
     }
 
     private var onlineStatusImage: String {
-        if store.onlineAIStatus.contains("成功") { return "checkmark.circle.fill" }
-        if store.onlineAIStatus.contains("失败") || store.onlineAIStatus.contains("错误") || store.onlineAIStatus.contains("不正确") { return "xmark.octagon.fill" }
-        return store.hasOnlineAPIKey ? "checkmark.shield.fill" : "key"
+        if store.onlineAIStatus.contains("成功") { return "checkmark.circle" }
+        return store.hasOnlineAPIKey ? "checkmark.shield" : "key"
     }
 
-    private var onlineStatusColor: Color {
-        if store.onlineAIStatus.contains("成功") { return .green }
-        if store.onlineAIStatus.contains("失败") || store.onlineAIStatus.contains("错误") || store.onlineAIStatus.contains("不正确") { return .red }
-        return .secondary
+    @ViewBuilder private var rewriteSaveStatus: some View {
+        if ["失败", "错误", "不正确"].contains(where: { store.onlineAIStatus.contains($0) }) {
+            WorkspaceIssueView(message: store.onlineAIStatus)
+        } else {
+            Label(store.onlineAIStatus, systemImage: onlineStatusImage)
+                .foregroundStyle(store.onlineAIStatus.contains("成功") ? Color.green : Color.secondary)
+        }
     }
-
 }

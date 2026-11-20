@@ -52,26 +52,20 @@ struct ResearchAccountsView: View {
 
     private func platformRow(_ platform: ResearchPlatform) -> some View {
         let account = store.account(for: platform)
-        return HStack(spacing: 12) {
-            Image(systemName: platform.systemImage)
-                .foregroundStyle(.tint)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(platform.title).font(.headline)
-                Text(accountStatus(platform, account: account))
-                    .font(.callout).foregroundStyle(.secondary)
-            }
-            Spacer()
-            if platform != .wechatChannels {
-                Button(account == nil ? "登录" : "重新登录") { presentLogin(platform) }
-                    .disabled(store.loginPlatform != nil)
-                    .accessibilityLabel("登录\(platform.title)")
-            }
-            if account != nil {
-                Button("移除…", role: .destructive) { accountToRemove = platform }
+        return AccountRow(title: platform.title, systemImage: platform.systemImage,
+                          description: accountStatus(platform, account: account)) {
+            HStack {
+                if platform != .wechatChannels {
+                    Button(account == nil ? "登录" : "重新登录") { presentLogin(platform) }
+                        .disabled(store.loginPlatform != nil)
+                        .accessibilityLabel("登录\(platform.title)")
+                }
+                if account != nil {
+                    Button("移除…", role: .destructive) { accountToRemove = platform }
+                        .accessibilityLabel("移除\(platform.title)账号")
+                }
             }
         }
-        .padding(.vertical, 4)
     }
 
     private func accountStatus(_ platform: ResearchPlatform, account: ResearchAccount?) -> String {

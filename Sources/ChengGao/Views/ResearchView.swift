@@ -10,6 +10,8 @@ struct ResearchView: View {
     let showComposer: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focusedResult: String?
+    @FocusState private var isBackFocused: Bool
+    @AccessibilityFocusState private var isDetailAccessibilityFocused: Bool
     @State private var showsFilters = false
     @State private var compactShowsDetail = false
 
@@ -43,17 +45,21 @@ struct ResearchView: View {
         }
         .workspaceMargins()
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItem(placement: .primaryAction) {
                 Button("搜索条件", systemImage: "line.3.horizontal.decrease") { showsFilters.toggle() }
                     .help("选择平台、时间范围和结果数量")
                     .popover(isPresented: $showsFilters) { filters }
-                if !researchStore.results.isEmpty {
+            }
+            .workspaceToolbarPriority(high: true)
+            if !researchStore.results.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
                     Menu("导出研究结果", systemImage: "square.and.arrow.up") {
                         ForEach(ResearchExportFormat.allCases) { format in
                             Button(format.rawValue) { researchStore.export(format) }
                         }
                     }
                 }
+                .workspaceToolbarPriority(high: false)
             }
         }
         .onChange(of: researchStore.isSearching) { _, searching in
@@ -145,14 +151,7 @@ struct ResearchView: View {
                         .disabled(readingDetail)
                         .accessibilityHidden(readingDetail)
                     if readingDetail {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Button("返回结果列表", systemImage: "chevron.left") {
-                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { compactShowsDetail = false }
-                            }
-                            .keyboardShortcut("[", modifiers: .command)
-                            .padding(8)
-                            selectedDetail
-                        }
+                        compactDetail
                     }
                 }
                 .frame(width: compact ? proxy.size.width : width * Self.resultsListFraction)
@@ -163,6 +162,27 @@ struct ResearchView: View {
             }
         }
         .workspaceEditorSurface(focused: false)
+    }
+
+    private var compactDetail: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button("返回结果列表", systemImage: "chevron.left") {
+                withAnimation(WorkspaceMotion.transition(reduceMotion: reduceMotion)) {
+                    compactShowsDetail = false
+                }
+                focusedResult = researchStore.selectedContentID
+            }
+            .keyboardShortcut("[", modifiers: .command)
+            .focused($isBackFocused)
+            .accessibilityFocused($isDetailAccessibilityFocused)
+            .onAppear {
+                isBackFocused = true
+                isDetailAccessibilityFocused = true
+            }
+            .padding(8)
+            selectedDetail
+        }
+        .transition(.opacity)
     }
 
     private func resultsList(compact: Bool) -> some View {
@@ -177,7 +197,9 @@ struct ResearchView: View {
                             Button {
                                 researchStore.selectedContentID = item.id
                                 if compact {
-                                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { compactShowsDetail = true }
+                                    withAnimation(WorkspaceMotion.transition(reduceMotion: reduceMotion)) {
+                                        compactShowsDetail = true
+                                    }
                                 }
                             } label: {
                                 resultRow(item, rank: index + 1)
@@ -238,7 +260,7 @@ struct ResearchView: View {
         HStack(spacing: 7) {
             Text(String(rank)).frame(width: 34)
             Text(item.platform.title)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(width: 58, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
@@ -268,6 +290,7 @@ struct ResearchView: View {
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("第\(rank)名，\(item.platform.title)，\(item.title)")
+        .accessibilityValue("点赞 \(metric(item.likeCount))，综合热度 \(item.hotScore.formatted(.number.precision(.fractionLength(1))))")
         .accessibilityHint("查看这条内容的详细信息与数据指标")
     }
 

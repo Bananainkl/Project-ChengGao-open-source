@@ -186,11 +186,11 @@ enum OutputPage: Int, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .original: "1 原稿"
-        case .suggestions: "2 修改建议"
-        case .revised: "3 修改稿"
-        case .visuals: "4 配图建议"
-        case .videos: "5 视频建议"
+        case .original: "原稿"
+        case .suggestions: "修改建议"
+        case .revised: "修改稿"
+        case .visuals: "配图建议"
+        case .videos: "视频建议"
         }
     }
 }

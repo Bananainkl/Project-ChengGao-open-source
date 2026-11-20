@@ -6,57 +6,31 @@ struct OutputView: View {
     let output: RewriteOutput
     let historyID: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(ManuscriptTextSize.storageKey) private var textSize = ManuscriptTextSize.standard
 
     @State private var selectedPage: OutputPage = .revised
     @State private var copyFeedback: String?
     @State private var feedbackTask: Task<Void, Never>?
-    @State private var confirmsDiscard = false
     @State private var isEditingDraft = false
-    @State private var editedTitle = ""
-    @State private var editedBody = ""
     @State private var showBatchImageConfirmation = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(output.title)
-                .font(.title2.weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-            Picker("结果分页", selection: $selectedPage) {
-                ForEach(OutputPage.allCases) { page in Text(page.title).tag(page) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            ScrollView {
-                pageContent
-                    .frame(maxWidth: 850, alignment: .leading)
-                    .padding(18)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .id(selectedPage)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .workspaceEditorSurface(focused: false)
-            .accessibilityLabel("\(selectedPage.title)内容滚动区")
-            .transition(.opacity)
-
-            HStack {
-                Button("上一页", systemImage: "chevron.left") { movePage(by: -1) }
-                    .disabled(selectedPage == .original)
-                Spacer()
-                if let copyFeedback {
-                    Label(copyFeedback, systemImage: "checkmark.circle")
-                        .font(.callout)
-                        .transition(.opacity)
-                }
-                Spacer()
-                Button("下一页", systemImage: "chevron.right") { movePage(by: 1) }
-                    .disabled(selectedPage == .videos)
-            }
+        VStack(spacing: 0) {
+            pageNavigation
+            Divider()
+            documentScrollView
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: selectedPage)
+        .animation(WorkspaceMotion.transition(reduceMotion: reduceMotion), value: selectedPage)
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItem(placement: .primaryAction) {
+                Button("编辑成稿", systemImage: "square.and.pencil") {
+                    isEditingDraft = true
+                }
+                .help("修改成稿标题和正文")
+            }
+            .workspaceToolbarPriority(high: true)
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+            ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button("复制本页") { copyPage() }
                     Button("复制全部五部分") {
@@ -67,14 +41,23 @@ struct OutputView: View {
                     Label("复制本页", systemImage: "doc.on.doc")
                 } primaryAction: { copyPage() }
                 .help("复制当前页；展开菜单可复制全部")
+            }
+            .workspaceToolbarPriority(high: false)
+            ToolbarItem(placement: .primaryAction) {
                 Button("输出文件包", systemImage: "square.and.arrow.up") {
                     store.exportShortVideoPackage(output)
                 }
                 .disabled(store.isGeneratingAllImages || store.generatingImageShotID != nil || store.generatingCoverFormat != nil)
                 .help("选择目录，输出文稿、封面与分镜")
             }
+            .workspaceToolbarPriority(high: true)
         }
-        .sheet(isPresented: $isEditingDraft) { draftEditor }
+        .sheet(isPresented: $isEditingDraft) {
+            DraftEditorSheet(title: output.title, body: output.subtitleReadyBody) { title, draft in
+                store.saveEditedDraft(title: title, revisedBody: draft, historyID: historyID)
+                showCopyFeedback("已保存成稿")
+            }
+        }
         .onDisappear { feedbackTask?.cancel() }
         .confirmationDialog(
             "批量生成 \(visualShots.count + coverArtworks.count) 张配图与封面？",
@@ -86,6 +69,61 @@ struct OutputView: View {
         } message: {
             Text("包含抖音竖版、横版封面和全部分镜。每张图片都会调用一次当前中转站的图片生成接口，可能产生费用；已保存到本机的图片会自动跳过。")
         }
+    }
+
+    private var pageNavigation: some View {
+        HStack(spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                pagePicker.pickerStyle(.segmented).fixedSize()
+                pagePicker.pickerStyle(.menu)
+            }
+            Spacer(minLength: 6)
+            if let copyFeedback {
+                Label(copyFeedback, systemImage: "checkmark.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+            ControlGroup {
+                Button("上一部分", systemImage: "chevron.left") { movePage(by: -1) }
+                    .disabled(selectedPage == .original)
+                    .help("上一部分（⌥⌘←）")
+                    .keyboardShortcut(.leftArrow, modifiers: [.option, .command])
+                Button("下一部分", systemImage: "chevron.right") { movePage(by: 1) }
+                    .disabled(selectedPage == .videos)
+                    .help("下一部分（⌥⌘→）")
+                    .keyboardShortcut(.rightArrow, modifiers: [.option, .command])
+            }
+            .labelStyle(.iconOnly)
+        }
+        .padding(.horizontal, WorkspaceLayout.detailHorizontalPadding)
+        .padding(.vertical, 10)
+    }
+
+    private var pagePicker: some View {
+        Picker("结果分页", selection: $selectedPage) {
+            ForEach(OutputPage.allCases) { page in Text(page.title).tag(page) }
+        }
+        .labelsHidden()
+    }
+
+    private var documentScrollView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(output.title)
+                    .font(.title.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                pageContent
+            }
+            .frame(maxWidth: 800, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .contentMargins(.horizontal, WorkspaceLayout.detailHorizontalPadding, for: .scrollContent)
+        .contentMargins(.vertical, 18, for: .scrollContent)
+        .id(selectedPage)
+        .accessibilityLabel("\(selectedPage.title)内容滚动区")
+        .transition(.opacity)
     }
 
     @ViewBuilder
@@ -131,6 +169,7 @@ struct OutputView: View {
                 }
                 DisclosureGroup(rawSourceDisclosureTitle) {
                     Text(output.rawTranscript)
+                        .font(textSize.font)
                         .textSelection(.enabled)
                         .foregroundStyle(.secondary)
                         .padding(.top, 8)
@@ -175,47 +214,13 @@ struct OutputView: View {
                 title: revisedPageTitle,
                 subtitle: isEditingDraft ? "正在编辑" : revisedPageSubtitle
             ) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Button("编辑成稿", systemImage: "square.and.pencil") {
-                        resetDraftEditor()
-                        isEditingDraft = true
-                    }
-                    documentCard(output.subtitleReadyBody)
-                }
+                documentCard(output.subtitleReadyBody)
             }
             .transition(.opacity)
 
         case .visuals:
             resultSection(title: "短视频镜头与配图", subtitle: visualSubtitle) {
-                HStack(spacing: 10) {
-                    Label(
-                        store.onlineImageGenerationStatus,
-                        systemImage: store.isGeneratingAllImages ? "photo.stack.fill" : "photo.badge.checkmark"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    Spacer()
-                    if store.isGeneratingAllImages || store.generatingImageShotID != nil {
-                        Button("停止生成", systemImage: "stop.fill", action: store.cancelImageGeneration)
-                    } else {
-                        Button("导出给 ChatGPT", systemImage: "square.and.arrow.up") {
-                            store.exportChatGPTImageMarkdown(output)
-                        }
-                        .disabled(visualShots.isEmpty)
-                        .help("把全部提示词按每 10 张一批导出为可续跑的 Markdown 任务文档")
-                        Button("批量生成封面与配图", systemImage: "photo.stack") {
-                            showBatchImageConfirmation = true
-                        }
-                        .disabled(!store.canGenerateImages || visualShots.isEmpty)
-                        .help(store.canGenerateImages ? "逐张调用图片接口；会先要求确认" : "请先在 AI 设置中配置图片接口、模型和独立 Key")
-                    }
-                }
-                .padding(12)
-                .workspaceGlassInset(
-                    cornerRadius: 14,
-                    tint: .accentColor,
-                    tintOpacity: 0.045
-                )
+                illustrationActions
 
                 VStack(alignment: .leading, spacing: 12) {
                     Label("抖音双封面", systemImage: "rectangle.on.rectangle.angled")
@@ -424,22 +429,64 @@ struct OutputView: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title)
                     .font(.title3.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             content()
+        }
+    }
+
+    private var illustrationActions: some View {
+        let status = Label(store.onlineImageGenerationStatus, systemImage: "photo")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                status.fixedSize(horizontal: true, vertical: false)
+                Spacer()
+                illustrationButtons
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                status
+                illustrationButtons
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .workspaceGlassInset(cornerRadius: 12)
+    }
+
+    private var illustrationButtons: some View {
+        ControlGroup {
+            if store.isGeneratingAllImages || store.generatingImageShotID != nil {
+                Button("停止生成", systemImage: "stop", action: store.cancelImageGeneration)
+            } else {
+                Button("导出给 ChatGPT", systemImage: "square.and.arrow.up") {
+                    store.exportChatGPTImageMarkdown(output)
+                }
+                .disabled(visualShots.isEmpty)
+                .help("每 10 张配图导出为一批 Markdown 任务")
+                Button("批量生成封面与配图", systemImage: "photo.stack") {
+                    showBatchImageConfirmation = true
+                }
+                .disabled(!store.canGenerateImages || visualShots.isEmpty)
+                .help(store.canGenerateImages ? "生成前需要确认" : "在图片 API 设置中配置服务、模型和 Key")
+            }
         }
     }
 
     private func documentCard(_ text: String) -> some View {
         Text(text)
             .textSelection(.enabled)
-            .font(.body)
+            .font(textSize.font)
             .lineSpacing(6)
             .frame(maxWidth: .infinity, alignment: .leading)
-
     }
 
     private func suggestionCell(title: String, text: String, emphasized: Bool = false) -> some View {
@@ -448,7 +495,7 @@ struct OutputView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(emphasized ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
             Text(text)
-                .font(.callout)
+                .font(textSize.font)
                 .foregroundStyle(.secondary)
                 .lineSpacing(4)
                 .textSelection(.enabled)
@@ -513,47 +560,6 @@ struct OutputView: View {
         }
     }
 
-    private var draftEditor: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("编辑成稿").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
-            TextField("成稿标题", text: $editedTitle)
-                .textFieldStyle(.roundedBorder)
-            TextEditor(text: $editedBody)
-                .font(.body)
-                .lineSpacing(5)
-                .padding(8)
-                .workspaceEditorSurface(focused: false)
-                .accessibilityLabel("成稿正文")
-            HStack {
-                Spacer()
-                Button("取消") {
-                    if hasDraftChanges { confirmsDiscard = true } else { isEditingDraft = false }
-                }
-                .keyboardShortcut(.cancelAction)
-                Button("保存修改") {
-                    store.saveEditedDraft(title: editedTitle, revisedBody: editedBody, historyID: historyID)
-                    isEditingDraft = false
-                    showCopyFeedback("已保存成稿")
-                }
-                .keyboardShortcut(.return, modifiers: .command)
-                .buttonStyle(.borderedProminent)
-                .disabled(editedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                          editedBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(minWidth: 440, idealWidth: 580, minHeight: 340, idealHeight: 440)
-        .interactiveDismissDisabled(hasDraftChanges)
-        .confirmationDialog("放弃未保存的修改？", isPresented: $confirmsDiscard) {
-            Button("放弃修改", role: .destructive) { isEditingDraft = false }
-            Button("继续编辑", role: .cancel) {}
-        }
-    }
-
-    private var hasDraftChanges: Bool {
-        editedTitle != output.title || editedBody != output.subtitleReadyBody
-    }
-
     private func copyPage() {
         store.copyOutputPage(selectedPage, output: output)
         showCopyFeedback("已复制本页")
@@ -564,12 +570,8 @@ struct OutputView: View {
         copyFeedback = message
         feedbackTask = Task { @MainActor in
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { copyFeedback = nil }
+            withAnimation(WorkspaceMotion.transition(reduceMotion: reduceMotion)) { copyFeedback = nil }
         }
     }
 
-    private func resetDraftEditor() {
-        editedTitle = output.title
-        editedBody = output.subtitleReadyBody
-    }
 }

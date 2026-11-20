@@ -7,6 +7,7 @@ struct ComposerView: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(SettingsPage.storageKey) private var settingsPage = SettingsPage.general
+    @AppStorage(ManuscriptTextSize.storageKey) private var textSize = ManuscriptTextSize.standard
     @FocusState private var editorFocused: Bool
     @State private var showsOptions = false
 
@@ -27,6 +28,7 @@ struct ComposerView: View {
                 .disabled(store.isProcessing)
             }
             editor
+            if store.sourceKind == .link { Spacer(minLength: 0) }
             if let error = store.errorMessage {
                 WorkspaceIssueView(message: error)
             }
@@ -42,20 +44,24 @@ struct ComposerView: View {
             footer
         }
         .workspaceMargins()
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: store.hasUnreadResult)
+        .animation(WorkspaceMotion.transition(reduceMotion: reduceMotion), value: store.hasUnreadResult)
         .onChange(of: store.sourceKind) { editorFocused = true }
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItem(placement: .primaryAction) {
                 Button("粘贴素材", systemImage: "doc.on.clipboard") {
                     store.pasteFromClipboard()
                     editorFocused = true
                 }
                 .disabled(store.isProcessing)
                 .help("从剪贴板粘贴素材（⇧⌘V）")
+            }
+            .workspaceToolbarPriority(high: false)
+            ToolbarItem(placement: .primaryAction) {
                 Button("改写选项", systemImage: "slider.horizontal.3") { showsOptions.toggle() }
                     .help("选择文稿格式、画面风格、输出语言和 AI 服务")
                     .popover(isPresented: $showsOptions, arrowEdge: .bottom) { options }
             }
+            .workspaceToolbarPriority(high: true)
         }
     }
 
@@ -67,7 +73,7 @@ struct ComposerView: View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: input)
-                    .font(.body)
+                    .font(textSize.font)
                     .lineSpacing(5)
                     .scrollContentBackground(.hidden)
                     .focused($editorFocused)
@@ -75,6 +81,7 @@ struct ComposerView: View {
                     .accessibilityLabel(store.sourceKind == .link ? "素材链接输入区" : "原稿编辑区")
                 if input.wrappedValue.isEmpty {
                     Text(store.sourceKind == .link ? "在此粘贴文章、视频链接或平台分享文字。" : "在此输入或粘贴字幕、文章或口播原稿。")
+                        .font(textSize.font)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 5)
                         .allowsHitTesting(false)
@@ -82,7 +89,8 @@ struct ComposerView: View {
                 }
             }
             .padding(16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(minHeight: 96, idealHeight: 136, maxHeight: store.sourceKind == .link ? 136 : .infinity)
 
             Divider()
             HStack(spacing: 8) {
@@ -118,6 +126,7 @@ struct ComposerView: View {
                     Label(store.privacySummary, systemImage: "lock.shield")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     if !store.hasOnlineAPIKey && !store.webAIEnabled {
                         Button("配置改写服务…", action: configureAI)
                             .buttonStyle(.link)

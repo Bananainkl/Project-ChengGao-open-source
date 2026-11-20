@@ -26,6 +26,7 @@ extension FocusedValues {
 
 struct RewriteCommands: Commands {
     @FocusedValue(\.rewriteActions) private var actions
+    @AppStorage(ManuscriptTextSize.storageKey) private var textSize = ManuscriptTextSize.standard
 
     var body: some Commands {
         CommandMenu("文稿") {
@@ -49,6 +50,18 @@ struct RewriteCommands: Commands {
                     .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
                     .disabled(actions == nil)
             }
+        }
+        CommandGroup(after: .toolbar) {
+            Divider()
+            Button("放大文稿文字") { textSize = textSize.adjusted(by: 1) }
+                .keyboardShortcut("=", modifiers: .command)
+                .disabled(textSize == .extraLarge)
+            Button("缩小文稿文字") { textSize = textSize.adjusted(by: -1) }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(textSize == .small)
+            Button("恢复标准文稿字号") { textSize = .standard }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(textSize == .standard)
         }
     }
 }

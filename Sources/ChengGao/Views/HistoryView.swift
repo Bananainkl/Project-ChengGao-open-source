@@ -22,7 +22,6 @@ struct HistoryView: View {
                             .keyboardShortcut("[", modifiers: .command)
                     }
                 }
-                .workspaceMargins()
         } else if store.history.isEmpty {
             ContentUnavailableView {
                 Label("还没有文稿记录", systemImage: "clock")
@@ -41,7 +40,7 @@ struct HistoryView: View {
                 } else {
                     List(matches) { item in
                         Button {
-                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { selection = item.id }
+                            withAnimation(WorkspaceMotion.transition(reduceMotion: reduceMotion)) { selection = item.id }
                         } label: {
                             HStack(spacing: 14) {
                                 Image(systemName: item.style.systemImage)

@@ -14,7 +14,7 @@ struct SidebarView: View {
                 ForEach(store.history.prefix(5)) { item in
                     Button { selectRecent(item) } label: {
                         Label {
-                            Text(item.title).lineLimit(2)
+                            Text(item.title).fixedSize(horizontal: false, vertical: true)
                         } icon: {
                             Image(systemName: "doc.text")
                         }

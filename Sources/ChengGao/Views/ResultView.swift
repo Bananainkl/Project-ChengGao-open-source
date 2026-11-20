@@ -11,6 +11,7 @@ struct ResultView: View {
                     ProgressView(value: progress.fraction) { Text(progress.message) }
                     Button("停止处理", action: store.cancelProcessing)
                 }
+                .workspaceMargins()
             }
             if let output = store.latestResultOutput {
                 let historyID = store.history.first(where: { $0.output == output })?.id
@@ -22,6 +23,7 @@ struct ResultView: View {
                                    action: store.regenerateLatestVisualPrompts)
                                 .disabled(!store.canRegenerateVisualPrompts)
                         }
+                        .workspaceToolbarPriority(high: false)
                     }
             } else if !store.isProcessing {
                 ContentUnavailableView {
@@ -36,7 +38,6 @@ struct ResultView: View {
                 Spacer()
             }
         }
-        .workspaceMargins()
         .onAppear { store.markResultViewed() }
         .onChange(of: store.hasUnreadResult) { _, unread in
             if unread { store.markResultViewed() }

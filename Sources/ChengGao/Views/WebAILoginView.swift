@@ -9,22 +9,17 @@ struct WebAILoginView: View {
         Form {
             Section {
                 ForEach(WebAIProvider.allCases) { provider in
-                    HStack(spacing: 12) {
-                        Image(systemName: provider.systemImage).foregroundStyle(.tint).frame(width: 26)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(provider.title).font(.headline)
-                            Text(provider == .qwen ? "qianwen.com" : "chat.deepseek.com")
-                                .font(.callout).foregroundStyle(.secondary)
+                    let domain = provider == .qwen ? "qianwen.com" : "chat.deepseek.com"
+                    AccountRow(title: provider.title, systemImage: provider.systemImage, description: domain) {
+                        HStack {
+                            if store.webAIProvider == provider && store.webAIEnabled {
+                                Label("使用中", systemImage: "checkmark.circle").font(.callout)
+                            }
+                            Button("打开登录页") { presentLogin(provider) }
+                                .disabled(store.webAILoginProvider != nil || store.isProcessing)
+                                .accessibilityLabel("登录 \(provider.title)")
                         }
-                        Spacer()
-                        if store.webAIProvider == provider && store.webAIEnabled {
-                            Label("使用中", systemImage: "checkmark.circle").font(.callout)
-                        }
-                        Button("打开登录页") { presentLogin(provider) }
-                            .disabled(store.webAILoginProvider != nil || store.isProcessing)
-                            .accessibilityLabel("登录 \(provider.title)")
                     }
-                    .padding(.vertical, 4)
                 }
             } header: {
                 Text("网页改写服务")

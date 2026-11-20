@@ -7,7 +7,6 @@ struct ContentView: View {
     @State private var historyID: UUID?
     @State private var login: WorkspaceLogin?
     @State private var confirmsClear = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationSplitView {
@@ -92,7 +91,7 @@ struct ContentView: View {
             cancel: isResearch ? researchStore.cancelSearch : store.cancelProcessing,
             clear: { confirmsClear = true }, paste: store.pasteFromClipboard,
             navigate: { destination in
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { section = destination }
+                section = destination
             }
         )
     }
