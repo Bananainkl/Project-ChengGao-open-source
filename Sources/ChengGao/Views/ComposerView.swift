@@ -1,303 +1,208 @@
-import AppKit
 import SwiftUI
 
 struct ComposerView: View {
     @Bindable var store: RewriteStore
+    let showResult: () -> Void
+    let showWebLogin: (WebAIProvider) -> Void
     @Environment(\.openSettings) private var openSettings
-    @Namespace private var glassNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(SettingsPage.storageKey) private var settingsPage = SettingsPage.general
+    @FocusState private var editorFocused: Bool
+    @State private var showsOptions = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WorkspaceLayout.headerContentSpacing) {
-            WorkspacePageHeader(title: "素材改写")
-
-            inputWorkspace
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                Label(store.sourceKind == .link ? "素材链接" : "原始素材",
+                      systemImage: store.sourceKind == .link ? "link" : "text.alignleft")
+                    .font(.title2.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 12)
+                Picker("素材来源", selection: $store.sourceKind) {
+                    ForEach(SourceKind.allCases) { kind in Text(kind.rawValue).tag(kind) }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .disabled(store.isProcessing)
+            }
+            editor
+            if let error = store.errorMessage {
+                WorkspaceIssueView(message: error)
+            }
+            if store.hasUnreadResult, !store.isProcessing {
+                HStack {
+                    Label("成稿已保存", systemImage: "checkmark.circle.fill")
+                    Spacer()
+                    Button("查看成稿", systemImage: "arrow.right", action: showResult)
+                }
+                .transition(.opacity)
+            }
+            Divider()
+            footer
         }
-        .padding(.horizontal, WorkspaceLayout.detailHorizontalPadding)
-        .padding(.top, WorkspaceLayout.detailTopPadding)
-        .padding(.bottom, WorkspaceLayout.detailBottomPadding)
-        .animation(.snappy, value: store.hasUnreadResult)
+        .workspaceMargins()
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: store.hasUnreadResult)
+        .onChange(of: store.sourceKind) { editorFocused = true }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button("粘贴素材", systemImage: "doc.on.clipboard") {
+                    store.pasteFromClipboard()
+                    editorFocused = true
+                }
+                .disabled(store.isProcessing)
+                .help("从剪贴板粘贴素材（⇧⌘V）")
+                Button("改写选项", systemImage: "slider.horizontal.3") { showsOptions.toggle() }
+                    .help("选择文稿格式、画面风格、输出语言和 AI 服务")
+                    .popover(isPresented: $showsOptions, arrowEdge: .bottom) { options }
+            }
+        }
     }
 
-    private var inputWorkspace: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("素材与处理设置", systemImage: "slider.horizontal.3")
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                Text(sourceInputStatus)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(store.sourceKind == .link && store.validSourceURL != nil ? .green : .secondary)
-            }
+    private var input: Binding<String> {
+        store.sourceKind == .link ? $store.sourceURL : $store.sourceText
+    }
 
-            HStack {
-                Picker("来源", selection: $store.sourceKind) {
-                    ForEach(SourceKind.allCases) { kind in
-                        Text(kind.rawValue).tag(kind)
-                    }
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: input)
+                    .font(.body)
+                    .lineSpacing(5)
+                    .scrollContentBackground(.hidden)
+                    .focused($editorFocused)
+                    .disabled(store.isProcessing)
+                    .accessibilityLabel(store.sourceKind == .link ? "素材链接输入区" : "原稿编辑区")
+                if input.wrappedValue.isEmpty {
+                    Text(store.sourceKind == .link ? "在此粘贴文章、视频链接或平台分享文字。" : "在此输入或粘贴字幕、文章或口播原稿。")
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 230)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            Divider()
+            HStack(spacing: 8) {
+                Label(store.style.rawValue, systemImage: store.style.systemImage)
+                Text("·").accessibilityHidden(true)
+                Text(store.outputLanguage.rawValue)
                 Spacer()
-                parameterControls
-            }
-
-            TextEditor(text: sourceInputBinding)
-                .font(.body)
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: 180, idealHeight: 260, maxHeight: .infinity)
-                .disabled(store.isProcessing)
-                .padding(10)
-                .workspaceGlassInset(cornerRadius: WorkspaceLayout.insetRadiusStandard)
-                .overlay(alignment: .topLeading) {
-                    if sourceInputBinding.wrappedValue.isEmpty {
-                        Text(store.sourceKind == .link
-                             ? "粘贴抖音、B站、YouTube、公众号、小红书或网页文章链接……"
-                             : "粘贴字幕、文章或其他原始素材……")
-                            .foregroundStyle(.tertiary)
-                            .padding(16)
-                            .allowsHitTesting(false)
-                    }
+                if store.sourceKind == .link, !store.sourceURL.isEmpty {
+                    let valid = store.validSourceURL != nil
+                    Label(valid ? "已识别链接" : "请输入完整网址", systemImage: valid ? "link" : "exclamationmark.triangle")
+                        .foregroundStyle(valid ? Color.secondary : .primary)
+                } else {
+                    Text("\(store.sourceCharacterCount) 字").monospacedDigit()
                 }
-
-            aiController
-
-            if store.sourceKind == .link, !store.sourceURL.isEmpty, store.validSourceURL == nil {
-                Label("没有识别到有效链接，请粘贴以 http:// 或 https:// 开头的完整地址。", systemImage: "link.badge.plus")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
             }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+        .workspaceEditorSurface(focused: editorFocused)
+    }
 
-            HStack(spacing: 12) {
+    private var footer: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
                 if let progress = store.processingProgress {
                     ProgressView(value: progress.fraction)
-                        .frame(maxWidth: 220)
-                        .accessibilityValue("\(Int(progress.fraction * 100))%，\(progress.message)")
-                    Text(progress.message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .frame(maxWidth: 250)
+                        .accessibilityLabel("改写进度")
+                    Text(progress.message).font(.callout)
                 } else {
-                    Text(store.statusMessage)
-                        .font(.caption)
+                    Label(store.privacySummary, systemImage: "lock.shield")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                executionControls
-            }
-
-            if store.hasUnreadResult, !store.isProcessing {
-                HStack(spacing: 10) {
-                    Label("文稿与 AI 镜头设计已完成，结果已保存。", systemImage: "checkmark.circle.fill")
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.green)
-                    Spacer()
-                    Button("前往处理结果", systemImage: "arrow.right.circle.fill") {
-                        store.openLatestResult()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding(12)
-                .background(.green.opacity(0.08), in: .rect(cornerRadius: WorkspaceLayout.insetRadiusCompact))
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            if let error = store.errorMessage {
-                StatusBanner(message: error, severity: .error)
-            }
-        }
-        .padding(16)
-        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusLarge, elevated: true)
-    }
-
-    private var sourceInputBinding: Binding<String> {
-        Binding(
-            get: { store.sourceKind == .link ? store.sourceURL : store.sourceText },
-            set: { value in
-                if store.sourceKind == .link { store.sourceURL = value }
-                else { store.sourceText = value }
-            }
-        )
-    }
-
-    private var sourceInputStatus: String {
-        if store.sourceKind == .link, store.validSourceURL != nil { return "链接已识别" }
-        return "\(store.sourceCharacterCount) 字"
-    }
-
-    private var parameterControls: some View {
-        HStack(spacing: 8) {
-            Menu {
-                ForEach(RewriteStyle.allCases) { style in
-                    Button { store.style = style } label: {
-                        Label(style.rawValue, systemImage: style.systemImage)
+                    if !store.hasOnlineAPIKey && !store.webAIEnabled {
+                        Button("配置改写服务…", action: configureAI)
+                            .buttonStyle(.link)
+                    } else {
+                        Text(store.statusMessage).font(.caption).foregroundStyle(.secondary)
                     }
                 }
-            } label: {
-                Label(store.style.rawValue, systemImage: store.style.systemImage)
             }
-            .accessibilityLabel("改写风格：\(store.style.rawValue)")
-            .glassEffectID("style", in: glassNamespace)
-
-            Menu {
-                ForEach(VisualStyle.allCases) { visualStyle in
-                    Button { store.visualStyle = visualStyle } label: {
-                        Label(visualStyle.rawValue, systemImage: visualStyle.systemImage)
-                    }
-                }
-            } label: {
-                Label(store.visualStyle.rawValue, systemImage: store.visualStyle.systemImage)
-            }
-            .accessibilityLabel("画面风格：\(store.visualStyle.rawValue)")
-            .glassEffectID("visual-style", in: glassNamespace)
-            .help("画面风格：\(store.visualStyle.summary)")
-
-            Menu {
-                ForEach(OutputLanguage.allCases) { language in
-                    Button { store.outputLanguage = language } label: {
-                        Label(language.rawValue, systemImage: store.outputLanguage == language ? "checkmark" : "character.bubble")
-                    }
-                }
-            } label: {
-                Label(store.outputLanguage.rawValue, systemImage: "character.bubble")
-            }
-            .accessibilityLabel("输出语言：\(store.outputLanguage.rawValue)")
-            .glassEffectID("language", in: glassNamespace)
-
-        }
-    }
-
-    private var aiController: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                aiControllerTitle
-                Spacer(minLength: 12)
-                aiControllerControls
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                aiControllerTitle
-                aiControllerControls
-            }
-        }
-        .padding(12)
-        .workspaceGlassInset(
-            cornerRadius: WorkspaceLayout.insetRadiusStandard,
-            tint: .accentColor,
-            tintOpacity: WorkspaceLayout.subtleTintOpacity
-        )
-    }
-
-    private var aiControllerTitle: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Label("AI 控制器", systemImage: "cpu")
-                .font(.subheadline.weight(.semibold))
-                .accessibilityAddTraits(.isHeader)
-            Text(store.selectedAIControllerProviderLabel)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var aiControllerControls: some View {
-        HStack(spacing: 10) {
-            Menu {
-                Section("网页 AI") {
-                    ForEach(WebAIProvider.allCases) { provider in
-                        Button {
-                            if !(store.webAIEnabled && store.webAIProvider == provider) {
-                                store.chooseWebAIFromController(provider)
-                            }
-                        } label: {
-                            if store.webAIEnabled && store.webAIProvider == provider {
-                                Label("\(provider.title) · 已启用", systemImage: "checkmark")
-                            } else {
-                                Label("\(provider.title) · 登录并使用", systemImage: provider.systemImage)
-                            }
-                        }
-                    }
-                    if store.webAIEnabled {
-                        Button {
-                            store.disableWebAI()
-                        } label: {
-                            Label("停用网页 AI，切回 API", systemImage: "arrow.uturn.backward")
-                        }
-                    }
-                }
-                Divider()
-                Section("API 模型") {
-                if store.onlineModelChoices.isEmpty {
-                    Text("尚未读取可用模型")
-                } else {
-                    ForEach(store.onlineModelChoices, id: \.self) { model in
-                        Button {
-                            store.selectOnlineModelForProcessing(model)
-                        } label: {
-                            if model == store.onlineModelDraft {
-                                Label(model, systemImage: "checkmark")
-                            } else {
-                                Text(model)
-                            }
-                        }
-                    }
-                }
-                }
-                Divider()
-                Button {
-                    store.refreshOnlineModelCatalog()
-                } label: {
-                    Label("刷新远程模型", systemImage: "arrow.clockwise")
-                }
-                .disabled(store.isLoadingOnlineModels)
-                Button {
-                    openSettings()
-                    NSApp.activate(ignoringOtherApps: true)
-                } label: {
-                    Label("配置 AI 服务…", systemImage: "gearshape")
-                }
-            } label: {
-                Label(
-                    store.selectedAIControllerLabel,
-                    systemImage: store.webAIEnabled ? "globe" : "cpu.fill"
-                )
-                    .lineLimit(1)
-                    .frame(maxWidth: 260)
-            }
-            .disabled(store.isProcessing)
-
-            Picker("推理深度", selection: $store.onlineReasoningEffort) {
-                ForEach(OnlineAIReasoningEffort.allCases) { effort in
-                    Text(effort.displayName).tag(effort)
-                }
-            }
-            .pickerStyle(.segmented)
-            .disabled(store.webAIEnabled || store.isProcessing)
-            .frame(width: 250)
-            .help("自动不发送额外参数；快速、标准、深入会请求相应推理深度。不支持该参数的兼容接口会自动回退。")
-        }
-    }
-
-    private var executionControls: some View {
-        HStack(spacing: 8) {
-            Button { store.pasteFromClipboard() } label: {
-                Label("粘贴", systemImage: "doc.on.clipboard")
-            }
-            .disabled(store.isProcessing)
-
+            .frame(maxWidth: .infinity, alignment: .leading)
             if store.isProcessing {
-                Button { store.cancelProcessing() } label: {
-                    Label("停止", systemImage: "stop.fill")
-                }
-                .keyboardShortcut(.escape, modifiers: [])
+                Button("停止处理", systemImage: "stop", action: store.cancelProcessing)
             } else {
-                Button { store.startRewrite() } label: {
-                    Label("开始处理", systemImage: "sparkles")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!store.canProcess)
-                .keyboardShortcut(.return, modifiers: [.command])
+                Button(store.errorMessage == nil ? "开始处理" : "重新处理",
+                       systemImage: "wand.and.stars", action: store.startRewrite)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(!store.canProcess)
+                    .help("提交当前素材（⌘↩）")
             }
         }
+    }
+
+    private var options: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("改写选项").font(.headline).accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button("完成") { showsOptions = false }
+            }
+            .padding(16)
+            Divider()
+            Form {
+                Section("输出") {
+                    Picker("文稿格式", selection: $store.style) {
+                        ForEach(RewriteStyle.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    Picker("画面风格", selection: $store.visualStyle) {
+                        ForEach(VisualStyle.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .help(store.visualStyle.summary)
+                    Picker("输出语言", selection: $store.outputLanguage) {
+                        ForEach(OutputLanguage.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                }
+                Section("改写服务") {
+                    LabeledContent("当前模型") {
+                        Menu(store.selectedAIControllerLabel) { modelOptions }
+                    }
+                    Picker("推理深度", selection: $store.onlineReasoningEffort) {
+                        ForEach(OnlineAIReasoningEffort.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    .disabled(store.webAIEnabled)
+                    Button("配置改写 API…", action: configureAI)
+                }
+            }
+            .formStyle(.grouped)
+            .disabled(store.isProcessing)
+        }
+        .frame(width: 350, height: 350)
+    }
+
+    @ViewBuilder private var modelOptions: some View {
+        Section("网页 AI") {
+            ForEach(WebAIProvider.allCases) { provider in
+                Button(provider.title) {
+                    showsOptions = false
+                    showWebLogin(provider)
+                }
+            }
+            if store.webAIEnabled {
+                Button("切回改写 API", action: store.disableWebAI)
+            }
+        }
+        Section("API 模型") {
+            ForEach(store.onlineModelChoices, id: \.self) { model in
+                Button(model) { store.selectOnlineModelForProcessing(model) }
+            }
+            Button("读取远程模型", action: store.refreshOnlineModelCatalog)
+                .disabled(store.isLoadingOnlineModels)
+        }
+    }
+
+    private func configureAI() {
+        showsOptions = false
+        settingsPage = .rewrite
+        openSettings()
     }
 }

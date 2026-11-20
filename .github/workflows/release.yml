@@ -1,6 +1,7 @@
 name: 发布 GitHub Release
 
 on:
+  pull_request:
   push:
     tags:
       - "v*"
@@ -12,26 +13,51 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  SOURCE_REF: ${{ github.event.pull_request.head.sha || inputs.tag || github.ref }}
+  TARGET_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
-  release:
-    runs-on: macos-26
-    env:
-      TARGET_TAG: ${{ inputs.tag || github.ref_name }}
+  build:
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TARGET_TAG }}
+          ref: ${{ env.SOURCE_REF }}
+      - name: 用 Xcode 27 构建应用
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+        run: |
+          ./script/bootstrap_runtime.sh
+          ./script/build_and_run.sh --package
+          ditto -c -k --keepParent "dist/澄稿.app" "$RUNNER_TEMP/ChengGao.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-for-macos26
+          path: ${{ runner.temp }}/ChengGao.zip
+          retention-days: 1
 
-      - name: 使用 Xcode 26.6
-        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+  verify:
+    needs: build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+      - name: 使用 macOS 26 ARM64 验收和封装
+        run: |
+          test "$(uname -m)" = arm64
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
 
       - name: 核对版本与更新说明
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
           build="$(tr -d '[:space:]' < BUILD_NUMBER)"
-          test "${TARGET_TAG}" = "v${version}"
+          if [[ "$GITHUB_EVENT_NAME" != pull_request ]]; then
+            test "${TARGET_TAG}" = "v${version}"
+          fi
           test -s RELEASE_NOTES.md
           grep -Fq "${version}" RELEASE_NOTES.md
           grep -Fq "## ${version} (${build})" CHANGELOG.md
@@ -52,9 +78,15 @@ jobs:
       - name: 测试
         run: swift test -Xswiftc -warnings-as-errors
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-for-macos26
+          path: ${{ runner.temp }}/built-app
       - name: 生成并验证 DMG
         run: |
-          ./script/package_dmg.sh
+          mkdir -p dist
+          ditto -x -k "$RUNNER_TEMP/built-app/ChengGao.zip" dist
+          ./script/package_dmg.sh --prebuilt
           version="$(tr -d '[:space:]' < VERSION)"
           dmg="ChengGao-${version}-macOS-arm64.dmg"
           legacy_dmg="澄稿-${version}-macOS-arm64.dmg"
@@ -69,6 +101,30 @@ jobs:
           hdiutil verify "dist/${dmg}"
           (cd dist && shasum -a 256 -c "${dmg}.sha256")
 
+      - name: 在 macOS 26 从 DMG 安装并启动
+        run: ./script/install_local.sh "dist/ChengGao-$(cat VERSION)-macOS-arm64.dmg"
+
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: verified-dmg
+          path: dist/ChengGao-*.dmg*
+          retention-days: 1
+
+  release:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-dmg
+          path: dist
       - name: 创建或更新 GitHub Release 并上传安装包
         env:
           GH_TOKEN: ${{ github.token }}

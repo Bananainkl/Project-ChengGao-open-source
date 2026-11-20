@@ -2,104 +2,77 @@ import SwiftUI
 
 struct HistoryView: View {
     @Bindable var store: RewriteStore
+    @Binding var selection: UUID?
+    let compose: () -> Void
+    @State private var query = ""
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: WorkspaceLayout.headerContentSpacing) {
-            WorkspacePageHeader(title: "最近处理")
-            Group {
-                if let item = store.selectedHistoryItem {
-                    historyDetail(item)
-                } else if store.history.isEmpty {
-                    ContentUnavailableView(
-                        "还没有处理记录",
-                        systemImage: "clock",
-                        description: Text("完成第一篇文稿后，记录会保存在这里。")
-                    )
-                } else {
-                    historyList
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .padding(.horizontal, WorkspaceLayout.detailHorizontalPadding)
-        .padding(.top, WorkspaceLayout.detailTopPadding)
-        .padding(.bottom, WorkspaceLayout.detailBottomPadding)
+    private var matches: [RewriteHistoryItem] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return store.history.filter { term.isEmpty || $0.title.localizedStandardContains(term) }
     }
 
-    private var historyList: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Text("共 \(store.history.count) 篇 · 自动保留最近 50 篇")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 34)
-
-            Divider()
-
-            List(selection: $store.selectedHistoryID) {
-                ForEach(store.history) { item in
-                    HStack(spacing: 12) {
-                        Image(systemName: item.style.systemImage)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 24)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.title).font(.headline).lineLimit(1)
-                            Text(item.style.rawValue).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(item.createdAt, format: .relative(presentation: .named))
-                            .foregroundStyle(.secondary)
+    var body: some View {
+        if let item = store.history.first(where: { $0.id == selection }) {
+            historyDetail(item)
+                .id(item.id)
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        Button("返回最近处理", systemImage: "chevron.left") { selection = nil }
+                            .keyboardShortcut("[", modifiers: .command)
                     }
-                    .padding(.vertical, 5)
-                    .contentShape(.rect)
-                    .tag(item.id)
-                    .accessibilityHint("打开完整处理结果")
+                }
+                .workspaceMargins()
+        } else if store.history.isEmpty {
+            ContentUnavailableView {
+                Label("还没有文稿记录", systemImage: "clock")
+            } description: {
+                Text("完成改写后，可在这里找回文稿、分镜与导出文件。")
+            } actions: {
+                Button("新建文稿", action: compose)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("共 \(store.history.count) 篇 · 保留最近 50 篇")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                if matches.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                } else {
+                    List(matches) { item in
+                        Button {
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { selection = item.id }
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: item.style.systemImage)
+                                    .foregroundStyle(.tint)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.title).font(.headline).fixedSize(horizontal: false, vertical: true)
+                                    Text(item.style.rawValue).font(.callout).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(LocalizedRelativeDate.string(from: item.createdAt))
+                                    .font(.callout).foregroundStyle(.secondary)
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 7)
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("打开文稿、分镜和导出操作")
+                    }
+                    .listStyle(.inset)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(.clear)
+            .workspaceMargins()
+            .searchable(text: $query, placement: .toolbar, prompt: "查找文稿标题")
         }
-        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusLarge, elevated: true)
     }
 
     private func historyDetail(_ item: RewriteHistoryItem) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button("返回最近处理", systemImage: "chevron.left") {
-                store.closeHistoryDetail()
-            }
-            .keyboardShortcut(.leftArrow, modifiers: [.command])
-
-            OutputView(
-                output: item.output,
-                actions: OutputViewActions(
-                    copyPage: { store.copyOutputPage($0, output: item.output) },
-                    copyAll: { store.copyOutput(item.output) },
-                    copyImagePrompt: store.copyImagePrompt,
-                    exportImageMarkdown: { store.exportChatGPTImageMarkdown(item.output) },
-                    exportPackage: { store.exportShortVideoPackage(item.output) },
-                    saveDraft: {
-                        store.saveEditedDraft(title: $0, revisedBody: $1, historyID: item.id)
-                    },
-                    generateImage: { store.generateImage(for: $0, in: item.output, historyID: item.id) },
-                    generateCover: { store.generateCover($0, in: item.output, historyID: item.id) },
-                    generateAllImages: { store.generateAllImages(in: item.output, historyID: item.id) },
-                    cancelImageGeneration: store.cancelImageGeneration,
-                    openGeneratedImage: store.openGeneratedImage,
-                    revealGeneratedImage: store.revealGeneratedImage
-                ),
-                imageState: ImageGenerationState(
-                    shotID: store.generatingImageShotID,
-                    coverFormat: store.generatingCoverFormat,
-                    isGeneratingAll: store.isGeneratingAllImages
-                ),
-                canGenerateImages: store.canGenerateImages,
-                imageGenerationStatus: store.onlineImageGenerationStatus
-            )
-        }
-        .frame(maxWidth: 940, maxHeight: .infinity, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        OutputView(
+            store: store, output: item.output, historyID: item.id
+        )
     }
 }

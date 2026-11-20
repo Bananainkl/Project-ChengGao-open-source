@@ -25,17 +25,28 @@ APP_ICON="$ROOT_DIR/Assets/AppIcon.icns"
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
 cd "$ROOT_DIR"
-swift build -c release \
+sdk_path="$(xcrun --sdk macosx --show-sdk-path)"
+sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+# SwiftPM can otherwise stamp the deployment target as the linked SDK as well.
+swift build -c release --sdk "$sdk_path" \
   -Xswiftc -warnings-as-errors \
   -Xswiftc -gnone \
-  -Xswiftc -file-prefix-map \
-  -Xswiftc "$ROOT_DIR=."
-BUILD_BINARY="$(swift build -c release --show-bin-path)/$APP_NAME"
+  -Xlinker -platform_version -Xlinker macos \
+  -Xlinker "$MIN_SYSTEM_VERSION" -Xlinker "$sdk_version"
+BUILD_BINARY="$(swift build -c release --sdk "$sdk_path" --show-bin-path)/$APP_NAME"
+build_versions="$(xcrun vtool -show-build "$BUILD_BINARY")"
+linked_sdk="$(awk '$1 == "sdk" {print $2; exit}' <<< "$build_versions")"
+deployment_target="$(awk '$1 == "minos" {print $2; exit}' <<< "$build_versions")"
+if [[ "$linked_sdk" != "$sdk_version" || "$deployment_target" != "$MIN_SYSTEM_VERSION" ]]; then
+  echo "链接版本不符，实际 SDK $linked_sdk，最低系统 $deployment_target。" >&2
+  exit 1
+fi
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
+/usr/bin/strip -S "$APP_BINARY"
 
 # A distributable app must never retain package-manager paths from the build Mac.
 # CSQLite links against the SQLite library supplied by the macOS SDK.

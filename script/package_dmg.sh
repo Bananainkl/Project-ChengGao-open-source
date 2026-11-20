@@ -15,7 +15,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"$ROOT_DIR/script/build_and_run.sh" --package
+case "${1:-}" in
+  "") "$ROOT_DIR/script/build_and_run.sh" --package ;;
+  --prebuilt)
+    # The macOS 26 packaging runner receives the app linked on the Xcode 27 runner.
+    build_info="$(xcrun vtool -show-build "$APP/Contents/MacOS/ChengGao")"
+    awk '$1 == "sdk" && int($2) == 27 {sdk=1} $1 == "minos" && $2 == "26.0" {target=1} END {exit !(sdk && target)}' <<< "$build_info"
+    ;;
+  *) echo "用法：$0 [--prebuilt]" >&2; exit 2 ;;
+esac
 
 ACTUAL_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 ACTUAL_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"

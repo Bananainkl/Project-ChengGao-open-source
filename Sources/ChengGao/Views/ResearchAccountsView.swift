@@ -2,79 +2,81 @@ import SwiftUI
 
 struct ResearchAccountsView: View {
     @Bindable var store: ResearchStore
+    let presentLogin: (ResearchPlatform) -> Void
+    @State private var accountToRemove: ResearchPlatform?
+    @State private var confirmsKeyDeletion = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WorkspaceLayout.headerContentSpacing) {
-            WorkspacePageHeader(title: "平台账号")
-            youtubeAPISection
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(ResearchPlatform.allCases) { platform in
-                        platformRow(platform)
-                        if platform != ResearchPlatform.allCases.last { Divider() }
-                    }
+        Form {
+            Section("平台连接") {
+                ForEach(ResearchPlatform.allCases) { platform in
+                    platformRow(platform)
                 }
-                .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
             }
-            .scrollIndicators(.visible)
+            Section("YouTube Data API") { youtubeAPISection }
         }
-        .padding(.horizontal, WorkspaceLayout.detailHorizontalPadding)
-        .padding(.top, WorkspaceLayout.detailTopPadding)
-        .padding(.bottom, WorkspaceLayout.detailBottomPadding)
-        .frame(maxWidth: 940, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .sheet(item: $store.loginPlatform) { platform in
-            PlatformLoginSheet(platform: platform, store: store)
+        .formStyle(.grouped)
+        .confirmationDialog("删除 YouTube API Key？", isPresented: $confirmsKeyDeletion) {
+            Button("删除 Key", role: .destructive, action: store.deleteYouTubeAPIKey)
+            Button("取消", role: .cancel) {}
+        }
+        .confirmationDialog("移除平台账号？", isPresented: Binding(
+            get: { accountToRemove != nil }, set: { if !$0 { accountToRemove = nil } }
+        ), presenting: accountToRemove) { platform in
+            Button("移除\(platform.title)账号", role: .destructive) { store.removeAccount(platform) }
+            Button("取消", role: .cancel) {}
         }
     }
 
     private var youtubeAPISection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("YouTube Data API", systemImage: "key.horizontal")
-                    .font(.headline)
-                Spacer()
-                Text(store.youtubeKeyStatus)
-                    .font(.caption)
-                    .foregroundStyle(store.hasYouTubeAPIKey ? .green : .secondary)
-            }
-            Text("配置 Google Data API Key 时优先使用官方接口；没有 Key 时会复用下方 YouTube 网页登录会话进行搜索。Key 只保存在权限为 0600 的本地私有凭证文件。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack {
-                SecureField("AIza…", text: $store.youtubeAPIKeyDraft)
+        VStack(alignment: .leading, spacing: 8) {
+            LabeledContent("API Key") {
+                SecureField("输入 Google Data API Key", text: $store.youtubeAPIKeyDraft)
                     .textFieldStyle(.roundedBorder)
-                Button("保存", action: store.saveYouTubeAPIKey)
+                    .accessibilityLabel("YouTube API Key")
+            }
+            Text("优先使用官方接口。未配置 Key 时使用 YouTube 网页登录会话，凭证只保存在本机。")
+                .font(.callout).foregroundStyle(.secondary)
+            HStack {
+                Label(store.youtubeKeyStatus, systemImage: "key").font(.callout)
+                Spacer()
                 if store.hasYouTubeAPIKey {
-                    Button("删除", role: .destructive, action: store.deleteYouTubeAPIKey)
+                    Button("删除 Key…", role: .destructive) { confirmsKeyDeletion = true }
                 }
+                Button("保存", action: store.saveYouTubeAPIKey)
+                    .disabled(store.youtubeAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(18)
-        .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
+        .padding(.vertical, 4)
     }
 
     private func platformRow(_ platform: ResearchPlatform) -> some View {
         let account = store.account(for: platform)
-        return AccountRow(
-            systemImage: platform.systemImage,
-            title: platform.title,
-            subtitle: platform.searchAvailability.label,
-            statusText: accountStatus(platform, account: account),
-            statusColor: account?.status == .loggedIn ? .green : .secondary
-        ) {
+        return HStack(spacing: 12) {
+            Image(systemName: platform.systemImage)
+                .foregroundStyle(.tint)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(platform.title).font(.headline)
+                Text(accountStatus(platform, account: account))
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer()
             if platform != .wechatChannels {
-                Button(account == nil ? "登录" : "重新登录") { store.beginLogin(platform) }
+                Button(account == nil ? "登录" : "重新登录") { presentLogin(platform) }
+                    .disabled(store.loginPlatform != nil)
+                    .accessibilityLabel("登录\(platform.title)")
             }
             if account != nil {
-                Button("移除", role: .destructive) { store.removeAccount(platform) }
+                Button("移除…", role: .destructive) { accountToRemove = platform }
             }
         }
+        .padding(.vertical, 4)
     }
 
     private func accountStatus(_ platform: ResearchPlatform, account: ResearchAccount?) -> String {
-        if platform == .wechatChannels { return "请在新建文稿粘贴视频号分享链接" }
+        if platform == .wechatChannels { return "在新建文稿中粘贴视频号分享链接" }
         if let account { return account.status.label }
-        return platform == .bilibili ? "公共搜索无需登录" : "未登录"
+        return platform == .bilibili ? "公共搜索无需登录" : "未登录 · \(platform.searchAvailability.label)"
     }
 }

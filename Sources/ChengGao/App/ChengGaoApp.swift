@@ -17,9 +17,9 @@ struct ChengGaoApp: App {
     var body: some Scene {
         WindowGroup("澄稿", id: "main") {
             ContentView(store: store, researchStore: researchStore)
-                .frame(minWidth: 980, minHeight: 680)
+                .frame(minWidth: 780, minHeight: 540)
         }
-        .defaultSize(width: 1_180, height: 780)
+        .defaultSize(width: 1_120, height: 740)
         .windowResizability(.contentMinSize)
         .commands {
             RewriteCommands()
@@ -28,6 +28,5 @@ struct ChengGaoApp: App {
         Settings {
             SettingsView(store: store)
         }
-        .windowResizability(.contentSize)
     }
 }
