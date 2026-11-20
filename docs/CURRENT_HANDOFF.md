@@ -21,6 +21,7 @@
 
 ### 当前状态、下一步与发布
 
+- macOS 26 ARM64 的独立检查已在 1.23.1 通过。1.23.3 的 SDK 27 构建任务已通过，两个 macOS 26 安装检查仍在等待托管运行器。 [1.23.1 已完成的检查](https://github.com/RandyVae/Project-ChengGao-open-source/actions/runs/44693947091) · [1.23.3 的备用安装检查](https://github.com/RandyVae/Project-ChengGao-open-source/actions/runs/44771596941)
 - 代码位于 `feature/macos27-workspace`，进入项目的公开草稿 PR。应用只更新到本机。公开分发仍受真实平台验收和 Gatekeeper 拒绝限制。本机当前包为临时签名。
 - 需要补验的实机路径有窄窗成稿编辑和设置、VoiceOver 朗读、系统增强对比度以及减弱动效。恢复真实平台回归后再进入正式签名和公证。
 - 本版涉及 `Sources/ChengGao/Views`、`FocusedRewriteActions.swift`、`RewriteModels.swift`、版本更新说明和设计验收图片。研究列表在窗口变宽或变窄期间保持挂载，设置数据按现有格式读取。
