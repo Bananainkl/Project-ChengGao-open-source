@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Testing
+import SwiftUI
 @preconcurrency import WebKit
 @testable import ChengGao
 
@@ -475,7 +476,16 @@ struct OfflineRewritePipelineTests {
           <div class="qk-markdown-complete">BEGIN\n完整结果\nEND</div>
         </body></html>
         """, baseURL: nil)
-        try await Task.sleep(for: .milliseconds(250))
+        // WebKit may start its content process after the test has started executing.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(8))
+        var editorLoaded = false
+        while !editorLoaded && ContinuousClock.now < deadline {
+            editorLoaded = try await webView.evaluateJavaScript(
+                "document.querySelector('[contenteditable]') !== null"
+            ) as? Bool == true
+            if !editorLoaded { try await Task.sleep(for: .milliseconds(40)) }
+        }
+        try #require(editorLoaded, "The WebKit fixture did not load its editable document")
         let focused = try await webView.callAsyncJavaScript(
             "return \(WebAIWebSession.focusEditorScript(provider: .qwen))",
             arguments: [:],
@@ -2927,6 +2937,48 @@ struct OfflineRewritePipelineTests {
     }
 
     @MainActor
+    @Test("Populated research results keep their selection across repeated window resizes")
+    func populatedResearchWindowResizes() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let link = try #require(URL(string: "https://example.com/research"))
+        let rows = (1...24).map { rank in
+            ResearchContent(
+                id: "sample-\(rank)", platform: .bilibili, platformContentID: "\(rank)",
+                keyword: "素材", title: String(repeating: "不同长度的研究条目", count: rank % 4 + 1), description: nil,
+                authorName: nil, authorURL: nil, contentURL: link, coverURL: nil, publishedAt: nil,
+                durationSeconds: nil, viewCount: nil, likeCount: rank, commentCount: nil, collectCount: nil,
+                shareCount: nil, hotScore: Double(rank), collectedAt: .now
+            )
+        }
+        let research = ResearchStore(searchService: ResearchSearchStub(contents: rows),
+                                     databaseURL: directory.appending(path: "research.sqlite3"))
+        research.keyword = "素材"
+        research.startSearch()
+        while research.isSearching { await Task.yield() }
+        try #require(research.results.count == rows.count)
+        research.selectedContentID = rows[12].id
+        let suite = "chenggao.resize.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let rewrite = RewriteStore(defaults: defaults, historyURL: directory.appending(path: "history.json"))
+        let view = NSHostingView(rootView: ResearchView(researchStore: research, rewriteStore: rewrite,
+                                                        search: {}, showComposer: {}))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 540),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.contentView = view
+        window.orderBack(nil)
+        defer { window.orderOut(nil); window.contentView = nil }
+        for width in [1120, 650, 1000, 760, 1080, 600] {
+            window.setContentSize(NSSize(width: width, height: 540))
+            view.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(30))
+            #expect(research.selectedContent?.id == rows[12].id)
+        }
+    }
+
+    @MainActor
     @Test("Unavailable selections do not block a ready public platform")
     func unavailablePlatformDoesNotBlockPublicSearch() async {
         let service = ResearchSearchStub(contents: [ResearchContent(
@@ -3648,5 +3700,38 @@ struct OfflineRewritePipelineTests {
         #expect(store.output?.revisedBody == "这是修改后的文稿。")
         #expect(store.output?.style == .article)
         #expect(store.history.first?.title == "可识别的历史标题")
+    }
+
+    @Test("Privacy disclosure names each active data destination")
+    @MainActor
+    func privacyDisclosureFollowsCurrentRewriteChannel() throws {
+        let suite = "PrivacyDisclosure-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let historyURL = FileManager.default.temporaryDirectory
+            .appending(path: "chenggao-privacy-disclosure-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: historyURL) }
+        let store = RewriteStore(defaults: defaults, historyURL: historyURL)
+
+        #expect(store.privacyDisclosure.contains("自定义兼容接口"))
+        #expect(store.privacyDisclosure.contains("完整标题、原稿和改写提示发送"))
+        #expect(store.privacyDisclosure.contains("视频音轨在本机"))
+        #expect(store.privacyDisclosure.contains("手动触发"))
+        #expect(!store.privacyDisclosure.contains("不会将您的文稿发送至任何第三方"))
+
+        store.webAIEnabled = true
+        #expect(store.privacyDisclosure.contains("网页会话"))
+        store.onlineTerminologyCheck = true
+        #expect(store.privacyDisclosure.contains("候选专有名词"))
+        #expect(store.privacyDisclosure.contains("不发送完整原稿"))
+    }
+
+    @Test("Recent activity uses Chinese relative dates")
+    func relativeDateUsesChineseLocale() {
+        let date = Date(timeIntervalSince1970: 0)
+        let now = date.addingTimeInterval(90 * 24 * 60 * 60)
+        let result = LocalizedRelativeDate.string(from: date, relativeTo: now)
+        #expect(result.contains("前"))
+        #expect(result.range(of: #"[A-Za-z]"#, options: .regularExpression) == nil)
     }
 }

@@ -1,82 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Shared visual treatment for the workspace. The ambient color lives behind
-/// the system material so panels still behave like native macOS glass instead
-/// of opaque, hand-painted cards.
-struct WorkspaceAmbientBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    var body: some View {
-        if reduceTransparency {
-            Color(nsColor: .windowBackgroundColor)
-        } else {
-            ZStack {
-                RadialGradient(
-                    colors: [
-                        Color.accentColor.opacity(colorScheme == .dark ? 0.16 : 0.09),
-                        .clear
-                    ],
-                    center: .topTrailing,
-                    startRadius: 24,
-                    endRadius: 620
-                )
-                RadialGradient(
-                    colors: [
-                        Color.cyan.opacity(colorScheme == .dark ? 0.10 : 0.055),
-                        .clear
-                    ],
-                    center: .bottomLeading,
-                    startRadius: 20,
-                    endRadius: 540
-                )
-                Rectangle().fill(.ultraThinMaterial)
-            }
-        }
-    }
-}
-
-private struct WorkspaceGlassPanelModifier: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    let cornerRadius: CGFloat
-    let elevated: Bool
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        content
-            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-            .overlay {
-                shape
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.22 : 0.72),
-                                Color.white.opacity(colorScheme == .dark ? 0.035 : 0.10),
-                                Color.black.opacity(colorScheme == .dark ? 0.16 : 0.045)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.8
-                    )
-                    .allowsHitTesting(false)
-            }
-            .shadow(
-                color: Color.black.opacity(
-                    elevated
-                        ? (colorScheme == .dark ? 0.22 : 0.085)
-                        : (colorScheme == .dark ? 0.14 : 0.05)
-                ),
-                radius: elevated ? 18 : 10,
-                x: 0,
-                y: elevated ? 8 : 4
-            )
-    }
-}
-
 private struct WorkspaceGlassInsetModifier: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
     let cornerRadius: CGFloat
     let tint: Color
     let tintOpacity: Double
@@ -84,7 +9,7 @@ private struct WorkspaceGlassInsetModifier: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
-            .background(.thinMaterial, in: .rect(cornerRadius: cornerRadius))
+            .background(Color(nsColor: .textBackgroundColor), in: shape)
             .overlay {
                 shape
                     .fill(tint.opacity(tintOpacity))
@@ -92,28 +17,13 @@ private struct WorkspaceGlassInsetModifier: ViewModifier {
             }
             .overlay {
                 shape
-                    .strokeBorder(
-                        Color.white.opacity(colorScheme == .dark ? 0.10 : 0.42),
-                        lineWidth: 0.65
-                    )
+                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
                     .allowsHitTesting(false)
             }
     }
 }
 
 extension View {
-    func workspaceGlassPanel(
-        cornerRadius: CGFloat = WorkspaceLayout.panelRadiusLarge,
-        elevated: Bool = false
-    ) -> some View {
-        modifier(
-            WorkspaceGlassPanelModifier(
-                cornerRadius: cornerRadius,
-                elevated: elevated
-            )
-        )
-    }
-
     func workspaceGlassInset(
         cornerRadius: CGFloat,
         tint: Color = .clear,
@@ -126,5 +36,28 @@ extension View {
                 tintOpacity: tintOpacity
             )
         )
+    }
+}
+
+private struct WorkspaceEditorSurface: ViewModifier {
+    var focused: Bool
+    @Environment(\.accessibilityShowBorders) private var showBorders
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        content
+            .background(Color(nsColor: .textBackgroundColor), in: shape)
+            .overlay {
+                shape.strokeBorder(focused ? Color.accentColor : Color(nsColor: .separatorColor),
+                                   lineWidth: focused || showBorders || contrast == .increased ? 2 : 1)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+extension View {
+    func workspaceEditorSurface(focused: Bool) -> some View {
+        modifier(WorkspaceEditorSurface(focused: focused))
     }
 }

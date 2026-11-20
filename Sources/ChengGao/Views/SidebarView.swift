@@ -2,82 +2,47 @@ import SwiftUI
 
 struct SidebarView: View {
     @Bindable var store: RewriteStore
+    @Binding var selection: WorkspaceSection
+    let selectRecent: (RewriteHistoryItem) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("澄稿")
-                    .font(.title3.weight(.semibold))
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 48)
-            .accessibilityAddTraits(.isHeader)
-
-            List(selection: $store.selectedSection) {
-                Section("工作区") {
-                    ForEach(WorkspaceSection.allCases) { section in
-                        HStack {
-                            Label(section.title, systemImage: section.systemImage)
-                            Spacer()
-                            if section == .results, store.hasUnreadResult {
-                                Circle()
-                                    .fill(.tint)
-                                    .frame(width: 7, height: 7)
-                                    .accessibilityLabel("有新的处理结果")
-                            }
-                        }
-                            .tag(section)
-                    }
-                }
-
-                if !store.history.isEmpty {
-                    Section("最近") {
-                        ForEach(store.history.prefix(WorkspaceLayout.sidebarRecentCount)) { item in
-                            Button {
-                                store.selectHistory(item)
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: item.style.systemImage)
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 16)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.title)
-                                            .lineLimit(1)
-                                        Text(item.createdAt, style: .relative)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .contentShape(.rect)
-                            .accessibilityHint("打开这篇文稿的完整处理结果")
+        List(selection: $selection) {
+            Section("工作台") { destinations([.compose, .results, .research]) }
+            Section("连接") { destinations([.onlineAI, .accounts]) }
+            Section("资料库") {
+                destinations([.history])
+                ForEach(store.history.prefix(5)) { item in
+                    Button { selectRecent(item) } label: {
+                        Label {
+                            Text(item.title).fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "doc.text")
                         }
                     }
-                }
-            }
-            .listStyle(.sidebar)
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0) {
-                    Divider()
-                    HStack(spacing: 8) {
-                        Image(systemName: "lock.shield")
-                        Text(store.privacySummary)
-                        Spacer()
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .buttonStyle(.plain)
+                    .help("\(item.title) · \(LocalizedRelativeDate.string(from: item.createdAt))")
+                    .accessibilityLabel("打开文稿，\(item.title)")
                 }
             }
         }
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .trailing) {
-            Divider()
-                .opacity(0.5)
-                .allowsHitTesting(false)
+        .listStyle(.sidebar)
+        .navigationTitle("澄稿")
+        .safeAreaInset(edge: .bottom, alignment: .leading, spacing: 0) {
+            SettingsLink {
+                Label("设置", systemImage: "gearshape")
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .help("打开澄稿设置（⌘,）")
+        }
+    }
+
+    private func destinations(_ sections: [WorkspaceSection]) -> some View {
+        ForEach(sections) { section in
+            Label(section.title, systemImage: section.systemImage)
+                .badge(section == .results && store.hasUnreadResult ? 1 : 0)
+                .tag(section)
         }
     }
 }

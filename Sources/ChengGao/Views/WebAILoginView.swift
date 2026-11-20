@@ -3,112 +3,55 @@ import SwiftUI
 
 struct WebAILoginView: View {
     @Bindable var store: RewriteStore
+    let presentLogin: (WebAIProvider) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WorkspaceLayout.headerContentSpacing) {
-            WorkspacePageHeader(title: "在线 AI 登录")
-            VStack(alignment: .leading, spacing: 10) {
-                Label("使用本人的网页账号改写", systemImage: "lock.shield")
-                    .font(.headline)
-                Text("登录由你在内置网页中完成。澄稿不读取密码，不导出 Cookie；处理时会把完整标题与正文组织为 Markdown 任务，在当前会话内提交并读回 Markdown 结果。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(18)
-            .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
-
-            VStack(spacing: 0) {
+        Form {
+            Section {
                 ForEach(WebAIProvider.allCases) { provider in
-                    providerRow(provider)
-                    if provider != WebAIProvider.allCases.last { Divider() }
+                    let domain = provider == .qwen ? "qianwen.com" : "chat.deepseek.com"
+                    AccountRow(title: provider.title, systemImage: provider.systemImage, description: domain) {
+                        HStack {
+                            if store.webAIProvider == provider && store.webAIEnabled {
+                                Label("使用中", systemImage: "checkmark.circle").font(.callout)
+                            }
+                            Button("打开登录页") { presentLogin(provider) }
+                                .disabled(store.webAILoginProvider != nil || store.isProcessing)
+                                .accessibilityLabel("登录 \(provider.title)")
+                        }
+                    }
                 }
+            } header: {
+                Text("网页改写服务")
+            } footer: {
+                Text("使用自己的网页账号登录。选择网页改写后，完整标题和正文将以 Markdown 发送到当前服务。")
             }
-            .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium, elevated: true)
-
-            HStack(spacing: 12) {
-                Label(store.webAIStatus, systemImage: store.webAIEnabled ? "checkmark.circle.fill" : "circle.dashed")
-                    .foregroundStyle(store.webAIEnabled ? .green : .secondary)
-                Spacer()
+            Section("当前会话") {
+                LabeledContent("状态") { Text(store.webAIStatus) }
                 if store.webAIEnabled {
-                    Button("停用网页 AI", action: store.disableWebAI)
+                    Button("停用网页 AI，切回 API", action: store.disableWebAI)
+                        .disabled(store.isProcessing)
                 }
             }
-            .font(.caption)
-            .padding(16)
-            .workspaceGlassPanel(cornerRadius: WorkspaceLayout.panelRadiusMedium)
-
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, WorkspaceLayout.detailHorizontalPadding)
-        .padding(.top, WorkspaceLayout.detailTopPadding)
-        .padding(.bottom, WorkspaceLayout.detailBottomPadding)
-        .frame(maxWidth: 940, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .sheet(item: $store.webAILoginProvider) { provider in
-            WebAILoginSheet(provider: provider, store: store)
-        }
-    }
-
-    private func providerRow(_ provider: WebAIProvider) -> some View {
-        AccountRow(
-            systemImage: provider.systemImage,
-            title: provider.title,
-            subtitle: provider == .qwen ? "qianwen.com 网页会话" : "chat.deepseek.com 网页会话",
-            statusText: store.webAIProvider == provider && store.webAIEnabled ? "当前改写渠道" : "",
-            statusColor: .green,
-            iconColor: store.webAIProvider == provider && store.webAIEnabled
-                ? Color.accentColor : Color.secondary
-        ) {
-            Button(store.webAIProvider == provider ? "打开／重新登录" : "选择并登录") {
-                store.beginWebAILogin(provider)
-            }
-        }
+        .formStyle(.grouped)
     }
 }
 
-private struct WebAILoginSheet: View {
+struct WebAILoginSheet: View {
     let provider: WebAIProvider
     @Bindable var store: RewriteStore
-    @Environment(\.dismiss) private var dismiss
     @State private var authenticated = false
     @State private var ready = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("登录 \(provider.title)").font(.headline)
-                    Text("请自行输入密码、扫码或完成验证；澄稿不读取这些内容。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Label(
-                    authenticated ? "已检测登录" : (ready ? "请完成账号登录" : "等待登录"),
-                    systemImage: authenticated ? "checkmark.circle.fill" : "clock"
-                )
-                .foregroundStyle(authenticated ? .green : .secondary)
-            }
-            .padding(16)
-            Divider()
+        WorkspaceLoginSheet(title: "登录 \(provider.title)",
+                            state: authenticated ? "已检测到登录" : (ready ? "请完成账号登录" : "等待登录"),
+                            authenticated: authenticated, confirmationTitle: "完成并用于改写") {
+            store.finishWebAILogin(provider, authenticated: authenticated, ready: ready)
+        } webContent: {
             WebAIWebView(provider: provider, authenticated: $authenticated, ready: $ready)
-            Divider()
-            HStack {
-                Text("登录后保持此网页会话，改写时可切回本页查看处理状态。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("取消") { dismiss() }
-                Button("完成并用于改写") {
-                    store.finishWebAILogin(provider, authenticated: authenticated, ready: ready)
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!authenticated)
-            }
-            .padding(14)
         }
-        .frame(minWidth: 940, minHeight: 680)
     }
 }
 

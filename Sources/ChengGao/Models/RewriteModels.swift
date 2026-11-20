@@ -26,7 +26,7 @@ enum WorkspaceSection: String, CaseIterable, Identifiable {
         case .compose: "square.and.pencil"
         case .results: "doc.text.magnifyingglass"
         case .research: "chart.line.uptrend.xyaxis"
-        case .onlineAI: "person.crop.circle.badge.checkmark"
+        case .onlineAI: "bubble.left.and.bubble.right"
         case .accounts: "person.2.crop.square.stack"
         case .history: "clock"
         }
@@ -186,11 +186,11 @@ enum OutputPage: Int, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .original: "1 原稿"
-        case .suggestions: "2 修改建议"
-        case .revised: "3 修改稿"
-        case .visuals: "4 配图建议"
-        case .videos: "5 视频建议"
+        case .original: "原稿"
+        case .suggestions: "修改建议"
+        case .revised: "修改稿"
+        case .visuals: "配图建议"
+        case .videos: "视频建议"
         }
     }
 }

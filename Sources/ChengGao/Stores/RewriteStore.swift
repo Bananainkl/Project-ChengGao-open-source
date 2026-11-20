@@ -91,6 +91,21 @@ final class RewriteStore {
             : "通过 \(onlineProvider.displayName) 在线改写会发送完整标题与正文"
     }
 
+    var privacyDisclosure: String {
+        let destination = webAIEnabled
+            ? "\(webAIProvider.title) 网页会话"
+            : "当前选择的「\(onlineProvider.displayName)」服务"
+        var disclosures = [
+            "在线改写会将完整标题、原稿和改写提示发送至\(destination)。",
+            "视频音轨在本机使用 Whisper 转写；转写得到的全文仍会发送至上述改写渠道。",
+            "图片生成仅在您手动触发时向独立图片服务发送分镜提示词，服务可能收费。"
+        ]
+        if onlineTerminologyCheck {
+            disclosures.append("联网核验开启时，只会向中文维基百科发送候选专有名词，不发送完整原稿。")
+        }
+        return disclosures.joined(separator: "\n")
+    }
+
     var selectedHistoryItem: RewriteHistoryItem? {
         guard let selectedHistoryID else { return nil }
         return history.first { $0.id == selectedHistoryID }
@@ -311,7 +326,7 @@ final class RewriteStore {
         let researchContent = pendingResearchContent
         pendingResearchContent = nil
 
-        processingTask = Task {
+        processingTask = Task { [self] in
             do {
                 try Task.checkCancellation()
                 if inputKind == .link {
@@ -448,7 +463,7 @@ final class RewriteStore {
         let requestedContextLimit = effectiveContextLimit
         let historyID = history.first(where: { $0.output == current })?.id
 
-        processingTask = Task {
+        processingTask = Task { [self] in
             do {
                 let visualResult = try await visualPromptGenerator.generate(
                     for: current,

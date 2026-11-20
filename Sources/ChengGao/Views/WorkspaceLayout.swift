@@ -1,27 +1,70 @@
+import AppKit
 import SwiftUI
 
 enum WorkspaceLayout {
-    static let detailHorizontalPadding: CGFloat = 14
-    static let detailTopPadding: CGFloat = 16
-    static let detailBottomPadding: CGFloat = 20
-    static let headerContentSpacing: CGFloat = 24
+    static let detailHorizontalPadding: CGFloat = 24
+    static let detailTopPadding: CGFloat = 14
+    static let detailBottomPadding: CGFloat = 18
+    static let headerContentSpacing: CGFloat = 12
+}
 
-    // Panel 三级圆角
-    static let panelRadiusLarge: CGFloat = 20
-    static let panelRadiusMedium: CGFloat = 16
-    static let panelRadiusSmall: CGFloat = 14
+enum WorkspaceMotion {
+    static func transition(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : .spring(duration: 0.26, bounce: 0)
+    }
+}
 
-    // Inset 二级圆角
-    static let insetRadiusStandard: CGFloat = 14
-    static let insetRadiusCompact: CGFloat = 12
+enum ManuscriptTextSize: String, CaseIterable, Identifiable {
+    static let storageKey = "workspace.manuscriptTextSize"
+    case small, standard, large, extraLarge
 
-    // 状态指示背景圆角
-    static let statusRadius: CGFloat = 10
+    var id: Self { self }
 
-    // 侧边栏
-    static let sidebarRecentCount: Int = 5
+    var label: String {
+        switch self {
+        case .small: "小"
+        case .standard: "标准"
+        case .large: "大"
+        case .extraLarge: "特大"
+        }
+    }
 
-    // Tint 透明度
-    static let subtleTintOpacity: Double = 0.04
-    static let emphasizedTintOpacity: Double = 0.055
+    var font: Font {
+        switch self {
+        case .small: .system(size: NSFont.systemFontSize - 1)
+        case .standard: .body
+        case .large: .system(size: NSFont.systemFontSize + 3)
+        case .extraLarge: .system(size: NSFont.systemFontSize + 6)
+        }
+    }
+
+    func adjusted(by offset: Int) -> Self {
+        let sizes = Self.allCases
+        guard let index = sizes.firstIndex(of: self) else { return self }
+        return sizes[min(max(index + offset, 0), sizes.count - 1)]
+    }
+}
+
+extension ToolbarContent {
+    @ToolbarContentBuilder
+    func workspaceToolbarPriority(high: Bool) -> some ToolbarContent {
+        #if compiler(>=6.4)
+        if #available(macOS 27, *) {
+            visibilityPriority(high ? .high : .low)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
+
+extension View {
+    func workspaceMargins() -> some View {
+        self
+            .padding(.horizontal, WorkspaceLayout.detailHorizontalPadding)
+            .padding(.top, WorkspaceLayout.detailTopPadding)
+            .padding(.bottom, WorkspaceLayout.detailBottomPadding)
+    }
 }

@@ -53,8 +53,9 @@ final class ResearchStore {
         Task { await loadPersistedData() }
     }
 
-    func startSearch() {
+    func startSearch(onLoginRequired: ((ResearchPlatform) -> Void)? = nil) {
         guard canSearch else { return }
+        let presentLogin = onLoginRequired ?? beginLogin
         let ignoredManualPlatform = selectedPlatforms.remove(.wechatChannels) != nil
         guard !selectedPlatforms.isEmpty else {
             errorMessage = "视频号不支持公开关键词检索。请在“新建文稿”粘贴视频号分享链接进行拆解。"
@@ -68,7 +69,7 @@ final class ResearchStore {
             let state = searchState(for: platform)
             errorMessage = "\(platform.title)没有有效登录会话（\(state.label)），请先在“平台账号”完成后再搜索。"
             statusMessage = "\(platform.title)\(state.label)"
-            if state.canSelect { loginPlatform = platform }
+            if state.canSelect { presentLogin(platform) }
             return
         }
         searchTask?.cancel()
@@ -104,7 +105,7 @@ final class ResearchStore {
         let service = searchService
         let database = database
 
-        searchTask = Task {
+        searchTask = Task { [self] in
             try? await database?.save(task: taskRecord)
             do {
                 let outcome = try await service.search(input: input) { [weak self] platform, completed, total in
@@ -148,7 +149,7 @@ final class ResearchStore {
                    let platform = selectedPlatforms.first,
                    error.localizedDescription.contains("重新登录") {
                     finishLogin(platform, detected: false)
-                    loginPlatform = platform
+                    presentLogin(platform)
                 }
                 try? await database?.save(task: taskRecord)
                 replaceTask(taskRecord)
